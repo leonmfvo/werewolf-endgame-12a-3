@@ -46,3 +46,17 @@ details{margin:4px 0 10px}details>summary{cursor:pointer;color:var(--link)}
 .day{font-size:13px;font-weight:400;color:var(--muted);margin-left:10px}
 h4{font-size:15px;margin:12px 0 4px}
 .legend{border:1px solid var(--border);background:var(--side);padding:8px 10px;margin:0 0 12px;line-height:1.7}
+.toc{border:1px solid var(--border);background:var(--side);padding:6px 12px;margin:0 0 14px;font-size:14px}
+.toc ol{margin:4px 0 0;padding-left:22px}
+table.cmp{border-collapse:collapse;width:100%;margin:6px 0 12px;font-size:15px}
+table.cmp th,table.cmp td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:middle}
+table.cmp th{background:var(--bar);font-weight:700}
+table.cmp td.n{white-space:nowrap}
+table.cmp tr.best td{background:var(--hl)}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--link);color:var(--link);border-radius:2em;padding:0 7px;margin-left:4px}
+ol.terms{margin:4px 0 8px;padding-left:24px}
+ol.terms li{margin:0 0 8px}
+.tw{font-size:14px;color:var(--fg)}
+.tm{overflow-x:auto;overflow-y:hidden;padding:2px 0;font-size:16px}
+.total{overflow-x:auto;font-weight:700}
+.katex{font-size:1.08em}

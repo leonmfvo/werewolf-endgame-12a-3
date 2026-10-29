@@ -44,7 +44,7 @@ def assignments(board):
         yield weight(roles), roles
 
 def situation(board, roles):
-    st = '1狼' + ('1狂' if 'X' in roles else '') + '生存'
+    st = '1w' + ('1k' if 'X' in roles else '') + '生存'
     hid = []
     if any(l == '灰' and r == 'H' for l, r in zip(board, roles)): hid.append('狩生存')
     if any(l == '灰' and r == 'C' for l, r in zip(board, roles)): hid.append('猫生存')
@@ -173,7 +173,7 @@ def solve(board):
                         plan=[desc_plan(board, t, x) for t, x in zip(vt, vs)],
                         adv=[desc_plan(board, t, x) for t, x in zip(at, ads)],
                         subs=subs, alts=alt_out))
-    order = lambda s: (('1狂' not in s['sit']), s['sit'])
+    order = lambda s: (('1k' not in s['sit']), s['sit'])
     out.sort(key=order)
     return dict(board=board, sits=out)
 

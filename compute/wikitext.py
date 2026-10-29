@@ -63,7 +63,7 @@ def case_title(board, roles, sit, single):
     return sit + 'で' + '・'.join(parts) if parts else sit
 
 def derivation(board, roles, votes):
-    """村勝ちになる票の入り方を、確率の掛け算で書く"""
+    """村勝ちになる票の入り方：(固定票, 項の並び, 合計)。項 = dict(f=[[説明, 確率]], o=None | ['猫飛び', 確率] | ['ランダム', [[狼, 確率] or [猫, 確率, 道連れ]]], v=値)"""
     n = len(board); ns = names(board, roles)
     fixed = []; terms = []
     for i, v in enumerate(votes):
@@ -74,75 +74,56 @@ def derivation(board, roles, votes):
         p = F(1); cnt = [0] * n; fac = []
         for i, (t, q) in enumerate(combo):
             p *= q; cnt[t] += 1
-            if q != 1: fac.append(f'{ns[i]}が{ns[t]}に入れる({fs(q)})')
+            if q != 1: fac.append([f'{ns[i]}が{ns[t]}に入れる', fs(q)])
         if p == 0: continue
         m = max(cnt); top = [k for k in range(n) if cnt[k] == m]
-        wins = []; wv = F(0)
+        parts = []; wv = F(0)
         for k in sorted(top, key=lambda k: roles[k] != 'W'):
-            if roles[k] == 'W': wins.append(f'1/{len(top)}' if len(top) > 1 else ''); wv += F(1, len(top))
+            if roles[k] == 'W': parts.append(['狼', fs(F(1, len(top)))]); wv += F(1, len(top))
             elif roles[k] == 'C':
                 dr = F(sum(1 for j in range(n) if j != k and roles[j] == 'W'), n - 1)
-                if dr: wins.append((f'1/{len(top)}×' if len(top) > 1 else '') + f'{fs(dr)}'); wv += dr / len(top)
+                if dr: parts.append(['猫', fs(F(1, len(top))), fs(dr)]); wv += dr / len(top)
         if wv == 0: continue
         total += p * wv
-        if len(top) > 1: out = f'ランダム({"+".join(wins)})'
-        elif roles[top[0]] == 'C': out = f'猫飛び({wins[0]})'
-        else: out = ''
-        f = '×'.join(fac + ([out] if out else []))
-        terms.append((f or '確実', p * wv))
-    if not terms: return fixed, '村勝ちはない（0）', total
-    if len(terms) == 1:
-        t, v = terms[0]
-        return fixed, (f'村勝ちは{t}={fs(v)}' if t != '確実' else '必ず狼が吊られる（1）'), total
-    return fixed, '村勝ちは' + 'と、'.join(f'{t}={fs(v)}' for t, v in terms) + f'の合計={fs(total)}', total
+        if len(top) > 1: o = ['ランダム', parts]
+        elif roles[top[0]] == 'C': o = ['猫飛び', parts[0][2]]
+        else: o = None
+        terms.append(dict(f=fac, o=o, v=fs(p * wv)))
+    return fixed, terms, fs(total)
 
 def board_text(board):
     sits = defaultdict(list)
     for w, roles in V3.assignments(board): sits[V3.situation(board, roles)].append((w, roles))
     if not sits: return None
     secs = []; summ = []
-    for st in sorted(sits, key=lambda s: ('1狂' not in s, s)):
+    for st in sorted(sits, key=lambda s: ('1k' not in s, s)):
         cases = sits[st]
         vt, at, best, allv, value = V3.solve_sit(board, cases)
         bv, vs, ads = best
-        # 比べる進め方：最善と、値の違う次の進め方
         plans = [(bv, vs, ads)]
         natural = lambda vsx: all(p in (0, F(1, 2), 1) for d in vsx for p in d.values())   # 比べるのは「全部入れる／1/2ずつ」の進め方
         for v, vs2, ads2 in sorted(allv, key=lambda x: -x[0]):
             if not natural(vs2): continue
-            if plan_text(board, vt, vs2) != plan_text(board, vt, vs) and all(plan_text(board, vt, vs2) != plan_text(board, vt, p[1]) for p in plans):
-                plans.append((v, vs2, ads2))
+            if all(plan_text(board, vt, vs2) != plan_text(board, vt, p[1]) for p in plans): plans.append((v, vs2, ads2))
             if len(plans) >= 2: break
-        # 内訳ごと（同じ見出しはまとめる：同じ形の内訳は値も同じ）
         groups = {}
-        for w, roles in cases:
-            t = case_title(board, roles, st, False)
-            groups.setdefault(t, (w, roles))
+        for w, roles in cases: groups.setdefault(case_title(board, roles, st, False), (w, roles))
         single = len(groups) == 1
         for t, (w, roles) in groups.items():
             title = st if single else t
-            lines = []; ders = []
-            vals = []
-            for v, vsx, adsx in plans:
+            items = []
+            for k, (v, vsx, adsx) in enumerate(plans):
                 Vd = dict(zip(vt, vsx)); A = dict(zip(at, adsx))
                 votes = [V3.vote_dist(board, i, Vd[(board[i], roles[i])] if roles[i] in V3.VILL else A[(board[i], roles[i])]) for i in range(len(board))]
-                fixed, der, tot = derivation(board, roles, votes)
+                fixed, terms, tot = derivation(board, roles, votes)
                 pt = plan_text(board, vt, vsx, {(board[i], roles[i]) for i in range(len(board))})
-                if any(pt == x[0] for x in ders): continue   # この内訳では同じ進め方になる
-                vals.append(f'{pt}なら{"村勝率" if not vals else ""}{fs(tot)}')
-                ders.append((pt, fixed, der))
-            lines.append('、'.join(vals))
-            for pt, fixed, der in ders:
-                lines.append(f'{pt}なら' + (f'、{"・".join(fixed)}の投票は固定なので、' if fixed else '、') + der)
-            if not any(x['title'] == title and x['lines'] == lines for x in secs): secs.append(dict(title=title, lines=lines))
-        summ.append(f'{st} → {fs(bv)}（{plan_text(board, vt, vs)}）')
+                if any(pt == x['plan'] for x in items): continue   # この内訳では同じ進め方になる
+                items.append(dict(plan=pt, best=(k == 0), fixed=fixed, terms=terms, v=tot))
+            sec = dict(title=title, items=items)
+            if not any(x['title'] == title and x['items'] == items for x in secs): secs.append(sec)
+        summ.append(dict(sit=st, v=fs(bv), plan=plan_text(board, vt, vs)))
     return dict(board=board, secs=secs, summ=summ)
 
 if __name__ == '__main__':
     import sys, json
-    b = sys.argv[1].split(',')
-    r = board_text(b)
-    for s in r['secs']:
-        print('■', s['title'])
-        for l in s['lines']: print('  ', l)
-    print('まとめ'); [print('  ', x) for x in r['summ']]
+    print(json.dumps(board_text(sys.argv[1].split(',')), ensure_ascii=False, indent=1)[:2500])

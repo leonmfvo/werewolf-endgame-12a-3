@@ -92,37 +92,46 @@ def derivation(board, roles, votes):
     return fixed, terms, fs(total)
 
 def board_text(board):
+    """村も人外も生存状況を知らない。盤面で1つの決め方（最善）と、比べる相手（次にいい「全部入れる／1/2ずつ」の決め方）"""
+    import vote3g as G
+    R = G.solve_board(board)
+    if not R: return None
+    plans = [('g', G.plan_dists(R), {t: {a: F(1)} for t, a in zip(R['at'], R['ads'])})]
+    if R['alt']: plans.append(('a', G.plan_dists(R, R['alt']['ps']), {t: {a: F(1)} for t, a in zip(R['at'], R['alt']['ads'])}))
     sits = defaultdict(list)
-    for w, roles in V3.assignments(board): sits[V3.situation(board, roles)].append((w, roles))
-    if not sits: return None
+    for w, roles in R['cases']: sits[V3.situation(board, roles)].append((w, roles))
+    allw = sum(w for w, _ in R['cases'])
     secs = []; summ = []
     for st in sorted(sits, key=lambda s: ('1k' not in s, s)):
-        cases = sits[st]
-        vt, at, best, allv, value = V3.solve_sit(board, cases)
-        bv, vs, ads = best
-        plans = [(bv, vs, ads)]
-        natural = lambda vsx: all(p in (0, F(1, 2), 1) for d in vsx for p in d.values())   # 比べるのは「全部入れる／1/2ずつ」の進め方
-        for v, vs2, ads2 in sorted(allv, key=lambda x: -x[0]):
-            if not natural(vs2): continue
-            if all(plan_text(board, vt, vs2) != plan_text(board, vt, p[1]) for p in plans): plans.append((v, vs2, ads2))
-            if len(plans) >= 2: break
+        cases = sits[st]; tot = sum(w for w, _ in cases)
         groups = {}
-        for w, roles in cases: groups.setdefault(case_title(board, roles, st, False), (w, roles))
+        for w, roles in cases: groups.setdefault(case_title(board, roles, st, False), []).append((w, roles))
         single = len(groups) == 1
-        for t, (w, roles) in groups.items():
+        for t, lst in groups.items():
+            w, roles = lst[0]
             title = st if single else t
             items = []
-            for k, (v, vsx, adsx) in enumerate(plans):
-                Vd = dict(zip(vt, vsx)); A = dict(zip(at, adsx))
-                votes = [V3.vote_dist(board, i, Vd[(board[i], roles[i])] if roles[i] in V3.VILL else A[(board[i], roles[i])]) for i in range(len(board))]
-                fixed, terms, tot = derivation(board, roles, votes)
-                pt = plan_text(board, vt, vsx, {(board[i], roles[i]) for i in range(len(board))})
-                if any(pt == x['plan'] for x in items): continue   # この内訳では同じ進め方になる
-                items.append(dict(plan=pt, best=(k == 0), fixed=fixed, terms=terms, v=tot))
-            sec = dict(title=title, items=items)
+            present = {(board[i], roles[i]) for i in range(len(board))}
+            for tag, P, A in plans:
+                votes = [V3.vote_dist(board, i, P[(board[i], roles[i])] if roles[i] in V3.VILL else A[(board[i], roles[i])]) for i in range(len(board))]
+                fixed, terms, tv = derivation(board, roles, votes)
+                pt = plan_text(board, list(P), [P[x] for x in P], present)
+                if tag == 'a' and any(pt == x['plan'] and tv == x['v'] for x in items): continue
+                items.append(dict(plan=pt, tag=tag, best=(tag == 'g'), fixed=fixed, terms=terms, v=tv))
+            sec = dict(title=title, share=fs(F(sum(x for x, _ in lst), allw)), items=items)
             if not any(x['title'] == title and x['items'] == items for x in secs): secs.append(sec)
-        summ.append(dict(sit=st, v=fs(bv), plan=plan_text(board, vt, vs)))
-    return dict(board=board, secs=secs, summ=summ)
+        vals = []
+        for tag, P, A in plans:
+            v = F(0)
+            for w, roles in cases:
+                votes = [V3.vote_dist(board, i, P[(board[i], roles[i])] if roles[i] in V3.VILL else A[(board[i], roles[i])]) for i in range(len(board))]
+                v += F(w, tot) * G.outcome(board, roles, votes, True)[1]
+            vals.append(fs(v))
+        summ.append(dict(sit=st, share=fs(F(tot, allw)), v=vals[0], va=vals[1] if len(vals) > 1 else None))
+    G_plan = plans[0][1]
+    return dict(board=board, v=fs(R['v']), plan=plan_text(board, list(G_plan), [G_plan[x] for x in G_plan]),
+                va=fs(R['alt']['v']) if R['alt'] else None, plana=plan_text(board, list(plans[1][1]), [plans[1][1][x] for x in plans[1][1]]) if R['alt'] else None,
+                secs=secs, summ=summ)
 
 if __name__ == '__main__':
     import sys, json

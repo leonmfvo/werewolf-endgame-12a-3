@@ -36,7 +36,7 @@
     for (const n of DAYS) {
       if (!D[n]) continue;
       h += `<h2>${n}人日（${D[n].length}盤面）</h2><table class="bl"><tbody>`;
-      for (const b of D[n]) h += `<tr><td><a href="#${n}-${b.id}">${esc(b.board.join(','))}</a></td><td class="sm">${b.sits.map((s) => `${esc(s.sit)} → ${esc(s.v)}（${pct(s.v)}）`).join('<br>')}</td></tr>`;
+      for (const b of D[n]) h += `<tr><td><a href="#${n}-${b.id}">${esc(b.board.join(','))}</a></td><td class="sm">${esc(b.plan)}</td><td class="n">${esc(b.v)}<br><span class="sm">${pct(b.v)}</span></td></tr>`;
       h += '</tbody></table>';
     }
     h += `<h2 id="rules">前提</h2><ul>
@@ -46,7 +46,7 @@
 <li>3人日は狼1人（狼2人なら決着済み）。吊りは投票：生きている全員が自分以外の1人に入れ、最多票の人が吊られる（同票なら同票の人からランダム）。狼を吊れば村の勝ち、人間を吊れば狼の勝ち。本物の猫又が吊られると、残りからランダムに1人を道連れにする（狼なら村の勝ち）。</li>
 <li>視点：生存状況（1狼1狂生存・（狩生存）など）は全員が知っている。誰がどの役かは自分の役しか分からない（狼は狂人を、狂人は狼を知らない）。</li>
 <li>表記：w＝狼、k＝狂人。1w1k生存＝狼1人と狂人が生きている。</li>
-<li>村（村人・狩人・猫又・霊能者）は、見た目と自分の役ごとに誰に入れるかを前もって決める（1/2ずつなど確率で混ぜてもよい。1/12刻みで探す）。狼と狂人は、それを知ったうえで、自分から見える情報で村勝率が一番低くなる投票をする。村はその最悪に対して一番勝てる決め方を選ぶ。生存状況の中の内訳は、役の札（村人4・狼3・ほか1枚ずつ）の数で重みをつけて平均する。</li>
+<li>村（村人・狩人・猫又・霊能者）は、盤面ごとに、見た目と自分の役から誰に入れるかを前もって1つ決める（1/2ずつなど確率で混ぜてもよい）。狼と狂人は、それを知ったうえで、自分から見える情報で村勝率が一番低くなる投票をする（2人で一番悪い組み合わせ）。村はその最悪に対して、すべての内訳の平均で一番勝てる決め方を選ぶ。内訳の重みは役の札（村人4・狼3・ほか1枚ずつ）の数から。</li>
 </ul>`;
     return h;
   }
@@ -73,12 +73,14 @@
   function page(n, b) {
     // wiki（ゲヘナのwiki）の書き方を、番号・改行・数式で見やすくしたもの
     let h = `<h1 class="pt">${esc(b.board.join(','))}<span class="day">${n}人日</span></h1>` + LEGEND;
+    h += `<div class="headline"><div>村の最善の投票：<b>${esc(b.plan)}</b></div><div>村勝率（すべての内訳の平均）：${tex(fx(b.v), b.v)} <span class="sm">${pct(b.v)}</span></div>`
+      + (b.plana ? `<div class="sm">比較：${esc(b.plana)} → ${esc(b.va)}（${pct(b.va)}）</div>` : '') + '</div>';
     h += '<nav class="toc"><b>目次</b><ol>' + b.secs.map((s, i) => `<li><a href="#${n}-${b.id}-c${i + 1}">${esc(s.title)}</a></li>`).join('') + `<li><a href="#${n}-${b.id}-sum">まとめ</a></li></ol></nav>`;
     b.secs.forEach((s, si) => {
-      h += `<h2 id="c${si + 1}">${esc(s.title)}</h2>`;
+      h += `<h2 id="c${si + 1}">${esc(s.title)}<span class="day">この盤面の ${pct(s.share)}</span></h2>`;
       h += '<table class="cmp"><thead><tr><th>村の投票</th><th>村勝率</th></tr></thead><tbody>';
       s.items.forEach((it, k) => {
-        h += `<tr class="${it.best ? 'best' : ''}"><td>${CIRC[k]} ${esc(it.plan)}${it.best ? ' <span class="tag">この生存状況で最善</span>' : ''}</td><td class="n">${tex(fx(it.v), it.v)} <span class="sm">${pct(it.v)}</span></td></tr>`;
+        h += `<tr class="${it.best ? 'best' : ''}"><td>${CIRC[k]} ${esc(it.plan)}${it.best ? ' <span class="tag">最善</span>' : ' <span class="tag gray">比較</span>'}</td><td class="n">${tex(fx(it.v), it.v)} <span class="sm">${pct(it.v)}</span></td></tr>`;
       });
       h += '</tbody></table>';
       s.items.forEach((it, k) => {
@@ -89,10 +91,11 @@
         if (it.terms.length > 1) h += `<p class="total">合計 ${tex(it.terms.map((t) => fx(t.v)).join('+') + ' = ' + fx(it.v))}</p>`;
       });
     });
-    h += `<h2 id="sum">まとめ</h2><table class="cmp"><thead><tr><th>生存状況</th><th>村勝率</th><th>最善の村の投票</th></tr></thead><tbody>`;
-    for (const x of b.summ) h += `<tr><td>${esc(x.sit)}</td><td class="n">${tex(fx(x.v), x.v)} <span class="sm">${pct(x.v)}</span></td><td class="sm">${esc(x.plan)}</td></tr>`;
-    h += '</tbody></table>';
-    h += '<p class="sm">読み方：「狼が真猫に入れる」などはその票が入る確率。猫飛び＝吊られた本物の猫又の道連れが狼に当たる確率。同票のランダム＝同票の人から吊りをくじで決めるときの、村が勝つ確率。固定の票＝人外がいつも同じ人に入れること。「この生存状況で最善」＝村からは内訳が見分けられないので、この生存状況の中の内訳を平均して一番勝てる投票の仕方（その内訳だけを見ると、もう一方の方が高いこともある）。</p>';
+    h += `<h2 id="sum">まとめ</h2><table class="cmp"><thead><tr><th>生存状況</th><th>割合</th><th>最善</th>${b.plana ? '<th>比較</th>' : ''}</tr></thead><tbody>`;
+    for (const x of b.summ) h += `<tr><td>${esc(x.sit)}</td><td class="n sm">${pct(x.share)}</td><td class="n">${tex(fx(x.v), x.v)} <span class="sm">${pct(x.v)}</span></td>${b.plana ? `<td class="n">${tex(fx(x.va), x.va)} <span class="sm">${pct(x.va)}</span></td>` : ''}</tr>`;
+    h += `<tr class="best"><td><b>平均</b></td><td></td><td class="n">${tex(fx(b.v), b.v)} <span class="sm">${pct(b.v)}</span></td>${b.plana ? `<td class="n">${tex(fx(b.va), b.va)} <span class="sm">${pct(b.va)}</span></td>` : ''}</tr></tbody></table>`;
+    h += `<p class="sm">最善：${esc(b.plan)}<br>${b.plana ? '比較：' + esc(b.plana) : ''}</p>`;
+    h += '<p class="sm">読み方：「狼が真猫に入れる」などはその票が入る確率。猫飛び＝吊られた本物の猫又の道連れが狼に当たる確率。同票のランダム＝同票の人から吊りをくじで決めるときの、村が勝つ確率。固定の票＝人外がいつも同じ人に入れること。最善＝村は生存状況も内訳も分からないので、この盤面のすべての内訳を平均して一番勝てる投票の仕方（1つの内訳だけを見ると比較の方が高いこともある）。比較＝「全部入れる／1/2ずつ」の投票の仕方で、最善と違うもののうち一番よいもの。</p>';
     return h;
   }
 

@@ -183,16 +183,7 @@ if __name__ == '__main__':
     import wikitext
     res = []
     for b in boards():
-        r = solve(b)
-        if not r: continue
         wt = wikitext.board_text(b)
-        r['secs'], r['summ'] = wt['secs'], wt['summ']
-        res.append(r)
+        if wt: res.append(wt); print(','.join(b), wt['v'], flush=True)
     json.dump(res, open(sys.argv[1], 'w'), ensure_ascii=False, separators=(',', ':'))
-    print(len(res), 'boards', sum(len(r['sits']) for r in res), 'situations')
-    for r in res:
-        if r['board'] == ['猫', '猫', '灰']:
-            for s in r['sits']:
-                print(s['sit'], s['v'], s['plan'], s['adv'])
-                for x in s['subs']: print('   ', x['det'], x['share'], x['v'], x['hang'])
-                for a in s['alts']: print('   alt', a['v'], a['plan'])
+    print(len(res), 'boards')

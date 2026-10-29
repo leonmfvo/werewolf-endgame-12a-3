@@ -60,3 +60,5 @@ ol.terms li{margin:0 0 8px}
 .tm{overflow-x:auto;overflow-y:hidden;padding:2px 0;font-size:16px}
 .total{overflow-x:auto;font-weight:700}
 .katex{font-size:1.08em}
+.tag.gray{border-color:var(--muted);color:var(--muted)}
+.headline{border:1px solid var(--border);padding:8px 12px;margin:0 0 12px;line-height:1.9}

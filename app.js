@@ -36,7 +36,7 @@
     for (const n of DAYS) {
       if (!D[n]) continue;
       h += `<h2>${n}人日（${D[n].length}盤面）</h2><table class="bl"><tbody>`;
-      for (const b of D[n]) h += `<tr><td><a href="#${n}-${b.id}">${esc(b.board.join(','))}</a></td><td class="sm">${b.sits.map((s) => `${esc(s.sit)} ${pct(s.v)}`).join('<br>')}</td></tr>`;
+      for (const b of D[n]) h += `<tr><td><a href="#${n}-${b.id}">${esc(b.board.join(','))}</a></td><td class="sm">${b.sits.map((s) => `${esc(s.sit)} → ${s.v}`).join('<br>')}</td></tr>`;
       h += '</tbody></table>';
     }
     h += `<h2 id="rules">前提</h2><ul>
@@ -51,28 +51,13 @@
   }
 
   function page(n, b) {
+    // wiki（ゲヘナのwiki）の書き方：見出し「1狼1狂生存で猫に狂」、1行目に進め方の比較、続けて確率の掛け算での導出、最後にまとめ
     let h = `<h1 class="pt">${esc(b.board.join(','))}<span class="day">${n}人日</span></h1>` + LEGEND;
-    h += '<h2>まとめ</h2><ul class="arrow">';
-    b.sits.forEach((s, i) => { h += `<li><a href="#${n}-${b.id}-s${i + 1}" data-jump="s${i + 1}">${esc(s.sit)}</a> → ${pct(s.v)}${fr(s.v)}</li>`; });
-    h += '</ul>';
-    b.sits.forEach((s, i) => {
-      h += `<h2 id="s${i + 1}">${esc(s.sit)} → ${pct(s.v)}${fr(s.v)}</h2>`;
-      h += `<p class="sub">村の投票（最善）</p><ul class="arrow">${s.plan.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
-      h += `<p class="sub">人外の投票</p><ul class="arrow">${s.adv.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
-      for (const c of s.subs) {
-        h += `<h3>${esc(c.det)} → ${val(c.v) === 1 ? '村勝ち' : val(c.v) === 0 ? '狼勝ち' : pct(c.v) + fr(c.v)}<span class="sm">（この生存状況の ${pct(c.share)}）</span></h3><ul class="arrow">`;
-        for (const [who, p] of c.hang) {
-          const r = who.includes('狼') ? '→ 村勝ち' : who.startsWith('猫（本物）') || who.includes('猫又') ? '→ 道連れで狼に当たれば村勝ち' : '→ 狼勝ち';
-          h += `<li>${esc(who)}が吊られる ${pct(p)}${fr(p)} ${r}</li>`;
-        }
-        h += '</ul>';
-      }
-      if (s.alts.length) {
-        h += '<p class="sub">ほかの投票の仕方</p><ul class="arrow">';
-        for (const a of s.alts) h += `<li>${a.plan.map(esc).join('／')} → ${pct(a.v)}${fr(a.v)}</li>`;
-        h += '</ul>';
-      }
-    });
+    for (const s of b.secs) {
+      h += `<h2>${esc(s.title)}</h2>` + s.lines.map((l) => `<p>${esc(l)}</p>`).join('');
+    }
+    h += '<h2>まとめ</h2>' + b.summ.map((l) => `<p>${esc(l)}</p>`).join('');
+    h += '<p class="sm">導出の読み方：「狼が真猫に入れる(1/2)」はその票が入る確率、「猫飛び(1/2)」は吊られた本物の猫又の道連れが狼に当たる確率、「ランダム(1/3+…)」は同票のときの吊りのくじ。「〇〇の投票は固定」は、その人外がいつも同じ人に入れること。</p>';
     return h;
   }
 

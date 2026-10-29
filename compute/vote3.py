@@ -178,7 +178,14 @@ def solve(board):
     return dict(board=board, sits=out)
 
 if __name__ == '__main__':
-    res = [r for r in (solve(b) for b in boards()) if r]
+    import wikitext
+    res = []
+    for b in boards():
+        r = solve(b)
+        if not r: continue
+        wt = wikitext.board_text(b)
+        r['secs'], r['summ'] = wt['secs'], wt['summ']
+        res.append(r)
     json.dump(res, open(sys.argv[1], 'w'), ensure_ascii=False, separators=(',', ':'))
     print(len(res), 'boards', sum(len(r['sits']) for r in res), 'situations')
     for r in res:

@@ -6,5 +6,6 @@
 - `index.html` / `app.js` / `style.css`：表示ページ（1枚）。`data/d<人数>.json` を読み、`#3-12` のような URL で盤面を開く
 - `data/d3.json`：3人日の全盤面（霊・猫・ギ・狩・灰の組み合わせ。投票まで含めて各人の視点で解く）
 - `compute/vote3.py`：3人日の計算（`python3 compute/vote3.py data/d3.json`）
+- `compute/wikitext.py`：計算結果を wiki（ゲヘナのwiki）の書き方の文章にする
 
 今後：4人日以上（11人日まで）を同じ形で足していく。

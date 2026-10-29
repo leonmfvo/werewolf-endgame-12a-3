@@ -39,6 +39,8 @@ def assignments(board):
         if any(roles.count(r) > ROLES[r] for r in ROLES): continue
         cats = [r for l, r in zip(board, roles) if l == '猫']
         if cats and cats.count('C') != 1: continue
+        # 狩人COが出ているなら、本物の狩人が灰に潜伏していることはない（偽の狩人COには本物が対抗する）
+        if '狩' in board and any(l == '灰' and r == 'H' for l, r in zip(board, roles)): continue
         # ギドラがいるなら、生きている本物の狩人・猫又はギドラに加わっている（灰にはいない）
         if 'ギ' in board and any(l == '灰' and r in 'HC' for l, r in zip(board, roles)): continue
         yield weight(roles), roles

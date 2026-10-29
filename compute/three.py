@@ -1,4 +1,4 @@
-# 12A猫（占い・霊能・狩人・猫又・狂人・狼3・村人4）の3人日：見た目の盤面すべてについて、内訳ごとの村勝率と最善の吊り先を厳密に求める。
+# 12A猫（占い・霊能・狩人・猫又・狂人・狼3・村人4）の3人日：霊・狩・ギドラ・猫・灰の見た目の盤面すべてについて、内訳ごとの村勝率と最善の吊り先を厳密に求める。
 #
 # 3人日は狼1人（狼2人なら決着済み）。この日の吊りで狼を吊れば村の勝ち、人間を吊れば残り2人で狼の勝ち。
 # 本物の猫又を吊ると、残りの2人からランダムに1人を道連れにする（狼なら村の勝ち）。
@@ -8,20 +8,15 @@ import json, itertools, sys
 from fractions import Fraction as F
 from collections import defaultdict
 
-ROLES = {'S': 1, 'M': 1, 'H': 1, 'C': 1, 'X': 1, 'W': 3, 'V': 4}
-RN = {'S': '占い師', 'M': '霊能者', 'H': '狩人', 'C': '猫又', 'X': '狂人', 'W': '狼', 'V': '村人'}
-HUMAN = 'SMHCXV'
-LABELS = ['占', '霊', '狩', '猫', '確白', '白', '黒', '灰']
-CAN = {'占': 'SXW', '霊': 'MXW', '狩': 'HXW', '猫': 'CXW', '確白': 'VHCX', '灰': 'VHCXW'}
+ROLES = {'M': 1, 'H': 1, 'C': 1, 'X': 1, 'W': 3, 'V': 4}   # 占い師は扱わない（占いの白黒は無視）
+RN = {'M': '霊能者', 'H': '狩人', 'C': '猫又', 'X': '狂人', 'W': '狼', 'V': '村人'}
+LABELS = ['霊', '狩', 'ギドラ', '猫', '灰']
+# CO者の正体の候補。猫は特別：猫又は役欠けがないので、猫COが1人なら本物（道連れが起きていない前提）。2人以上なら1人が本物、残りは偽（狂人・狼）
+CAN = {'霊': 'MXW', '狩': 'HXW', 'ギドラ': 'HCXW', '灰': 'VHCXW'}
+SHORT = {'M': '真', 'H': '狩', 'C': '猫', 'X': '狂', 'W': '狼'}
 
 def boards(n=3):
-    out = []
-    for combo in itertools.combinations_with_replacement(LABELS, n):
-        c = list(combo)
-        if (('白' in c) or ('黒' in c)) and c.count('占') > 1: continue   # 結果は1人の占い師のもの（2人いるときは載せない）
-        if max(c.count(x) for x in ('占', '霊', '狩', '猫')) > 3: continue
-        out.append(c)
-    return out
+    return [list(c) for c in itertools.combinations_with_replacement(LABELS, n)]
 
 def weight(roles):
     """役の数からの重み（生き残っている役の組み合わせが、役の札から選ばれる数）"""
@@ -31,33 +26,15 @@ def weight(roles):
     return w
 
 def cases(board):
-    """[(重み, 役の並び, 占いの結果の出どころ)]。結果の出どころ：生きている占いCO者 / 死んだ本物 / 死んだ偽（狂人・狼）"""
-    res = '白' in board or '黒' in board
-    srcs = [None]
-    if res: srcs = ['alive'] if '占' in board else ['deadS', 'deadX', 'deadW']
+    """[(重み, 役の並び, None)]"""
+    opts = [('CXW' if l == '猫' else CAN[l]) for l in board]
     out = []
-    for src in srcs:
-        opts = []
-        for i, l in enumerate(board):
-            if l in CAN: opts.append(CAN[l])
-            else: opts.append('VHCXW')   # 白・黒：あとで結果の出どころと照らす
-        for roles in itertools.product(*opts):
-            if roles.count('W') != 1: continue
-            if any(roles.count(r) > ROLES[r] for r in ROLES): continue
-            # 占いの結果の真偽
-            if res:
-                if src == 'alive':
-                    sr = roles[board.index('占')]
-                    true_seer = sr == 'S'
-                else:
-                    true_seer = src == 'deadS'
-                    if src == 'deadS' and 'S' in roles: continue
-                    if src == 'deadX' and 'X' in roles: continue
-                if true_seer:
-                    if any(l == '白' and r == 'W' for l, r in zip(board, roles)): continue
-                    if any(l == '黒' and r != 'W' for l, r in zip(board, roles)): continue
-            w = weight(roles) * (3 if src == 'deadW' else 1)
-            out.append((w, roles, src))
+    for roles in itertools.product(*opts):
+        if roles.count('W') != 1: continue
+        if any(roles.count(r) > ROLES[r] for r in ROLES): continue
+        cats = [r for l, r in zip(board, roles) if l == '猫']
+        if cats and cats.count('C') != 1: continue          # 猫CO者の中に本物の猫又が必ず1人
+        out.append((weight(roles), roles, None))
     return out
 
 def hang_value(board, roles, cls):
@@ -75,22 +52,21 @@ def hang_value(board, roles, cls):
     return v
 
 def describe(board, roles, src):
-    """内訳の見出し：生存状況（1狼1狂生存・灰に狩 など）と、CO者の真偽・狼の位置"""
-    mad = 'X' in roles
-    st = '1狼' + ('1狂' if mad else '') + '生存'
-    hpos = [l for l, r in zip(board, roles) if r == 'H']
-    cpos = [l for l, r in zip(board, roles) if r == 'C']
-    st += ('・' + hpos[0] + 'に狩') if hpos and hpos[0] != '狩' else ('・狩CO（本物）' if hpos else '')
-    st += ('・' + cpos[0] + 'に猫又') if cpos and cpos[0] != '猫' else ('・猫CO（本物）' if cpos else '')
-    st = st.replace('灰に狩', '灰に狩').replace('確白に狩', '確白が狩人').replace('白に狩', '白が狩人').replace('黒に狩', '黒が狩人')
-    st = st.replace('確白に猫又', '確白が猫又').replace('白に猫又', '白が猫又').replace('黒に猫又', '黒が猫又')
+    """生存状況（1狼1狂生存（狩生存） など）と、CO者の正体・狼の位置"""
+    st = '1狼' + ('1狂' if 'X' in roles else '') + '生存'
+    hid = []
+    if any(l == '灰' and r == 'H' for l, r in zip(board, roles)): hid.append('狩生存')
+    if any(l == '灰' and r == 'C' for l, r in zip(board, roles)): hid.append('猫生存')
+    if hid: st += '（' + '・'.join(hid) + '）'
     det = []
-    for l in ('占', '霊', '狩', '猫'):
-        rs = sorted(r for b, r in zip(board, roles) if b == l)
-        if rs: det.append(l + ''.join({'S': '真', 'M': '真', 'H': '真', 'C': '真', 'X': '狂', 'W': '狼'}[r] for r in rs))
-    if src and src != 'alive': det.append({'deadS': '結果は死んだ本物の占い師のもの', 'deadX': '結果は死んだ偽の占い（狂人）のもの', 'deadW': '結果は死んだ偽の占い（狼）のもの'}[src])
-    wl = [l for l, r in zip(board, roles) if r == 'W'][0]
-    if wl in ('白', '黒', '灰', '確白'): det.append(f'{wl}が狼' if board.count(wl) == 1 else f'{wl}に狼')
+    for l in ('霊', '狩', 'ギドラ', '猫'):
+        rs = [r for b, r in zip(board, roles) if b == l]
+        if not rs: continue
+        if l == '猫' and len(rs) == 1: continue          # 1人なら本物で決まり
+        if l == 'ギドラ': det.append('ギドラ' + ''.join(SHORT[r] for r in sorted(rs, key='HCXW'.index)))
+        elif l == '猫': det.append('猫' + ''.join({'C': '真', 'X': '狂', 'W': '狼'}[r] for r in sorted(rs, key='CXW'.index)))
+        else: det.append(l + ''.join({'M': '真', 'H': '真', 'X': '狂', 'W': '狼'}[r] for r in sorted(rs, key='MHXW'.index)))
+    if any(l == '灰' and r == 'W' for l, r in zip(board, roles)): det.append('灰に狼' if board.count('灰') > 1 else '灰が狼')
     return st, '、'.join(det)
 
 def solve(board):

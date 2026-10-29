@@ -15,13 +15,14 @@ RN = {'M': '霊能者', 'H': '狩人', 'C': '猫又', 'X': '狂人', 'W': '狼',
 LABELS = ['霊', '猫', 'ギ', '狩', '灰']
 CAN = {'霊': 'MXW', '狩': 'HXW', 'ギ': 'HCXW', '灰': 'VHCXW'}
 VILL = set('MHCV')
-GRID = [F(0), F(1, 4), F(1, 3), F(1, 2), F(2, 3), F(3, 4), F(1)]
+GRID = sorted({F(k, 12) for k in range(13)})   # 混ぜる確率の刻み（1/12）
 
 def boards(n=3):
     out = []
     for c in itertools.combinations_with_replacement(LABELS, n):
         c = list(c)
         if 'ギ' in c and ('猫' in c or '狩' in c): continue   # ギドラは猫・狩のCOとは同時に出ない
+        if c.count('ギ') == 1: continue                       # ギドラは2人以上で出すCO。1人だけは意味がない
         out.append(c)
     return out
 
@@ -38,6 +39,8 @@ def assignments(board):
         if any(roles.count(r) > ROLES[r] for r in ROLES): continue
         cats = [r for l, r in zip(board, roles) if l == '猫']
         if cats and cats.count('C') != 1: continue
+        # ギドラがいるなら、生きている本物の狩人・猫又はギドラに加わっている（灰にはいない）
+        if 'ギ' in board and any(l == '灰' and r in 'HC' for l, r in zip(board, roles)): continue
         yield weight(roles), roles
 
 def situation(board, roles):

@@ -62,3 +62,35 @@ ol.terms li{margin:0 0 8px}
 .katex{font-size:1.08em}
 .tag.gray{border-color:var(--muted);color:var(--muted)}
 .headline{border:1px solid var(--border);padding:8px 12px;margin:0 0 12px;line-height:1.9}
+
+/* ---- 詰めた表示（FC2wiki ふう） ---- */
+body{font-size:14px;line-height:1.55}
+header.site{padding:6px 12px;font-size:16px}
+.layout{gap:12px;margin:10px auto;padding:0 10px}
+.side{flex:0 0 200px;font-size:12px}
+.mb{margin:0 0 8px;padding:0 0 3px}
+.mh{padding:3px 8px;margin:0 0 2px}
+.mb li{margin:0}
+article{padding:0 10px 8px}
+h1.pt{font-size:15px;margin:0 -10px 8px;padding:5px 10px}
+h2{font-size:15px;margin:12px 0 6px;padding:2px 8px}
+h3{font-size:14px;margin:10px 0 4px;padding:1px 8px}
+p{margin:0 0 5px}
+ul,ol{margin:0 0 6px}
+.legend{padding:5px 8px;margin:0 0 8px;line-height:1.5;font-size:12px}
+.toc{padding:4px 10px;margin:0 0 8px;font-size:13px}
+.toc ol{columns:2;column-gap:24px;margin:2px 0 0}
+.headline{padding:5px 10px;margin:0 0 8px;line-height:1.6}
+table.cmp{font-size:13px;margin:4px 0 8px}
+table.cmp th,table.cmp td{padding:3px 7px}
+ol.terms li{margin:0 0 4px}
+.tw{font-size:13px}
+.tm{font-size:14px;padding:0}
+.upd{margin-top:10px;font-size:12px}
+/* トップの一覧：盤面と勝率を複数列に詰める */
+.blist{columns:3 190px;column-gap:16px;margin:0 0 8px;padding:0;list-style:none;font-size:13.5px}
+.blist li{break-inside:avoid;display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted var(--border);padding:1px 2px}
+.blist .v{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--muted);white-space:nowrap}
+.tm{display:inline-block;max-width:100%;vertical-align:middle;overflow-x:auto}
+ol.terms li{margin:0 0 2px}
+.tm .katex,.total .katex,table.cmp .katex,.headline .katex{font-size:1.25em}

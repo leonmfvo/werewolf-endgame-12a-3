@@ -35,9 +35,9 @@
     let h = '<h1 class="pt">12A猫 盤面別勝率</h1><p>盤面（生きている人の見た目）を選ぶと、生存状況ごとに、<b>村はどう投票すればよいか</b>と、そのときの村勝率が内訳ごとに出ます。投票は一人ひとりの視点（自分の役しか分からない）で考えています。</p>' + LEGEND;
     for (const n of DAYS) {
       if (!D[n]) continue;
-      h += `<h2>${n}人日（${D[n].length}盤面）</h2><table class="bl"><tbody>`;
-      for (const b of D[n]) h += `<tr><td><a href="#${n}-${b.id}">${esc(b.board.join(','))}</a></td><td class="sm">${esc(b.plan)}</td><td class="n">${esc(b.v)}<br><span class="sm">${pct(b.v)}</span></td></tr>`;
-      h += '</tbody></table>';
+      h += `<h2>${n}人日（${D[n].length}盤面）</h2><ul class="blist">`;
+      for (const b of D[n]) h += `<li><a href="#${n}-${b.id}">${esc(b.board.join(','))}</a><span class="v">${pct(b.v)}</span></li>`;
+      h += '</ul>';
     }
     h += `<h2 id="rules">前提</h2><ul>
 <li>配役：占い・霊能・狩人・猫又・狂人・狼3・村人4（12A猫）。今は占いの白黒を使わず、霊能CO・猫又CO・ギドラCO・狩人CO・灰の組み合わせだけを扱う（占い師は死亡している扱い）。ギドラは猫又CO・狩人COと同じ盤面には出ない。ギドラは2人以上で出すCOなので、ギが1人だけの盤面はない。ギドラが出ているときは、生きている本物の狩人・猫又はギドラに加わっているので、灰に狩人・猫又はいない。</li>
@@ -54,7 +54,7 @@
 
   // 数式（KaTeX）。読み込めなければ文字のまま
   const tex = (t, plain) => (window.katex ? katex.renderToString(t, { throwOnError: false }) : esc(plain || t));
-  const fx = (s) => { const [a, b] = String(s).split('/'); return b ? `\\dfrac{${a}}{${b}}` : a; };
+  const fx = (s) => { const [a, b] = String(s).split('/'); return b ? `\\tfrac{${a}}{${b}}` : a; };
   const CIRC = '①②③④⑤⑥⑦⑧⑨⑩';
   // 分数のかけ算（文字列の分数どうし）
   const gcd = (a, b) => (b ? gcd(b, a % b) : a);
@@ -96,13 +96,13 @@
       s.items.forEach((it, k) => {
         h += `<h3>${CIRC[k]} ${esc(it.plan)}なら</h3>`;
         if (it.paths) {
-          h += '<ol class="terms">' + it.paths.map(([lab, p, v]) => `<li><div class="tw">${esc(lab)}</div><div class="tm">${tex(`${fx(p)}\\times${fx(v)} = ${fx(mul(p, v))}`)}</div></li>`).join('') + '</ol>';
+          h += '<ol class="terms">' + it.paths.map(([lab, p, v]) => `<li><span class="tw">${esc(lab)}</span>：<span class="tm">${tex(`${fx(p)}\\times${fx(v)} = ${fx(mul(p, v))}`)}</span></li>`).join('') + '</ol>';
           if (it.paths.length > 1) h += `<p class="total">合計 ${tex(it.paths.map(([, p, v]) => fx(mul(p, v))).filter((x) => x !== '0').join('+') + ' = ' + fx(it.v))}</p>`;
           return;
         }
         if (it.fixed.length) h += `<p class="sm">固定の票：${esc(it.fixed.join('、'))}（人外がいつもこの人に入れる）</p>`;
         if (!it.terms.length) { h += `<p>村勝ちになる票の入り方はない → ${tex('0')}</p>`; return; }
-        h += '<ol class="terms">' + it.terms.map((t) => `<li><div class="tw">${esc(termWords(t))}</div><div class="tm">${tex(termTex(t))}</div></li>`).join('') + '</ol>';
+        h += '<ol class="terms">' + it.terms.map((t) => `<li><span class="tw">${esc(termWords(t))}</span>：<span class="tm">${tex(termTex(t))}</span></li>`).join('') + '</ol>';
         if (it.terms.length > 1) h += `<p class="total">合計 ${tex(it.terms.map((t) => fx(t.v)).join('+') + ' = ' + fx(it.v))}</p>`;
       });
     });

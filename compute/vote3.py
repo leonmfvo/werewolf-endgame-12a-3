@@ -39,6 +39,9 @@ def assignments(board):
         if any(roles.count(r) > ROLES[r] for r in ROLES): continue
         cats = [r for l, r in zip(board, roles) if l == '猫']
         if cats and cats.count('C') != 1: continue
+        # 霊COが1人・狩COが1人なら本物（偽のCOには本物が対抗する）
+        if board.count('霊') == 1 and roles[board.index('霊')] != 'M': continue
+        if board.count('狩') == 1 and roles[board.index('狩')] != 'H': continue
         # 狩人COが出ているなら、本物の狩人が灰に潜伏していることはない（偽の狩人COには本物が対抗する）
         if '狩' in board and any(l == '灰' and r == 'H' for l, r in zip(board, roles)): continue
         # ギドラがいるなら、生きている本物の狩人・猫又はギドラに加わっている（灰にはいない）

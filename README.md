@@ -8,4 +8,9 @@
 - `compute/vote3.py`：3人日の計算（`python3 compute/vote3.py data/d3.json`）
 - `compute/wikitext.py`：計算結果を wiki（ゲヘナのwiki）の書き方の文章にする
 
-今後：4人日以上（11人日まで）を同じ形で足していく。
+- `compute/game.py`：4・5人日の木（投票・道連れ・噛み・護衛・GJ・狩人CO）と、人外の最善応答の探索
+- `compute/plans.py`：村の進め方の候補
+- `compute/run45.py`：4・5人日の全盤面で候補を試す（`python3 compute/run45.py 4 data/plans4.json 4`）
+- `compute/analyze45.py`：ページ用の説明（`python3 compute/analyze45.py 4 data/plans4.json data/d4.json`）
+
+今後：6人日以上（11人日まで）を同じ形で足していく。

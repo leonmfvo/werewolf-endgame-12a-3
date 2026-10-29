@@ -5,7 +5,7 @@
   const val = (s) => { const [a, b] = String(s).split('/'); return b ? a / b : +a; };
   const pct = (s) => (val(s) * 100).toFixed(1) + '%';
   const fr = (s) => (String(s).includes('/') && String(s).length <= 9 ? `（${s}）` : '');
-  const DAYS = [3];
+  const DAYS = [3, 4, 5];
   const D = {};
   const LEGEND = '<div class="legend sm"><b>記号</b>　霊＝霊能CO者、猫＝猫又CO者、ギ＝ギドラ（「狩人か猫又」とCOした人）、狩＝狩人CO者、灰＝グレー（今は占いの白黒は使わない）。'
     + 'w＝狼、k＝狂人（1w1k生存＝狼1人と狂人が生きている）。（狩生存）＝灰の中に狩人がいる、（猫生存）＝灰の中に猫又がいる。'
@@ -41,8 +41,9 @@
     }
     h += `<h2 id="rules">前提</h2><ul>
 <li>配役：占い・霊能・狩人・猫又・狂人・狼3・村人4（12A猫）。今は占いの白黒を使わず、霊能CO・猫又CO・ギドラCO・狩人CO・灰の組み合わせだけを扱う（占い師は死亡している扱い）。ギドラは猫又CO・狩人COと同じ盤面には出ない。ギドラは2人以上で出すCOなので、ギが1人だけの盤面はない。ギドラが出ているときは、生きている本物の狩人・猫又はギドラに加わっているので、灰に狩人・猫又はいない。</li>
-<li>猫又は役欠けがない（初日犠牲者にならない）。猫又COが1人で、それまでに道連れや猫噛みの死者が出ていなければ本物で確定。2人以上なら1人が本物、残りは狂人か狼。</li>
+<li>猫又は役欠けがない（初日犠牲者にならない）。猫又COが1人で、それまでに道連れや猫噛みの死者が出ていなければ本物で確定。2人以上なら1人が本物、残りは狂人か狼。霊COが1人、狩COが1人のときも本物とする（偽のCOには本物が対抗する）。</li>
 <li>COの正体：霊＝本物／狂人／狼、狩＝本物／狂人／狼、ギ＝狩人／猫又／狂人／狼。灰に残った霊能者はいない扱い。狩人COが出ているときは、本物の狩人が灰に潜伏していることはない（偽の狩人COには本物が対抗する）。</li>
+<li>4・5人日：村の進め方の候補（昼に指定する区分の順、指定するか各自ランダムに入れるか、本物のCO者は対抗に入れるか、狩人の護衛先、GJの翌朝に狩人がCOするか）をすべて試し、それぞれに狼と狂人が自分の視点で最善を返したときに一番勝てるものを選ぶ。人外の最善は、交互に手を良くする探索（やり直し15回）で求めている（3人日ではすべての手を試した結果と一致することを確かめた）。夜は狩人が護衛（連続護衛あり）、狼が噛む（見分けのつかない人からはランダム）。本物の猫又を噛むと狼がランダムに1人死ぬ。GJの翌朝に狩人がCOすると、狩人と護衛先（白）が見た目に出る。</li>
 <li>3人日は狼1人（狼2人なら決着済み）。吊りは投票：生きている全員が自分以外の1人に入れ、最多票の人が吊られる（同票なら同票の人からランダム）。狼を吊れば村の勝ち、人間を吊れば狼の勝ち。本物の猫又が吊られると、残りからランダムに1人を道連れにする（狼なら村の勝ち）。</li>
 <li>視点：生存状況（1狼1狂生存・（狩生存）など）は全員が知っている。誰がどの役かは自分の役しか分からない（狼は狂人を、狂人は狼を知らない）。</li>
 <li>表記：w＝狼、k＝狂人。1w1k生存＝狼1人と狂人が生きている。</li>
@@ -55,6 +56,15 @@
   const tex = (t, plain) => (window.katex ? katex.renderToString(t, { throwOnError: false }) : esc(plain || t));
   const fx = (s) => { const [a, b] = String(s).split('/'); return b ? `\\dfrac{${a}}{${b}}` : a; };
   const CIRC = '①②③④⑤⑥⑦⑧⑨⑩';
+  // 分数のかけ算（文字列の分数どうし）
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const mul = (x, y) => {
+    const [a, b = '1'] = String(x).split('/'), [c, d = '1'] = String(y).split('/');
+    let n = BigInt(a) * BigInt(c), m = BigInt(b) * BigInt(d);
+    const big = (p, q) => (q === 0n ? p : big(q, p % q));
+    const g = big(n < 0n ? -n : n, m); if (g > 1n) { n /= g; m /= g; }
+    return m === 1n ? String(n) : `${n}/${m}`;
+  };
 
   function termTex(t) {
     const fs = t.f.map((x) => fx(x[1]));
@@ -85,6 +95,11 @@
       h += '</tbody></table>';
       s.items.forEach((it, k) => {
         h += `<h3>${CIRC[k]} ${esc(it.plan)}なら</h3>`;
+        if (it.paths) {
+          h += '<ol class="terms">' + it.paths.map(([lab, p, v]) => `<li><div class="tw">${esc(lab)}</div><div class="tm">${tex(`${fx(p)}\\times${fx(v)} = ${fx(mul(p, v))}`)}</div></li>`).join('') + '</ol>';
+          if (it.paths.length > 1) h += `<p class="total">合計 ${tex(it.paths.map(([, p, v]) => fx(mul(p, v))).filter((x) => x !== '0').join('+') + ' = ' + fx(it.v))}</p>`;
+          return;
+        }
         if (it.fixed.length) h += `<p class="sm">固定の票：${esc(it.fixed.join('、'))}（人外がいつもこの人に入れる）</p>`;
         if (!it.terms.length) { h += `<p>村勝ちになる票の入り方はない → ${tex('0')}</p>`; return; }
         h += '<ol class="terms">' + it.terms.map((t) => `<li><div class="tw">${esc(termWords(t))}</div><div class="tm">${tex(termTex(t))}</div></li>`).join('') + '</ol>';
@@ -110,7 +125,8 @@
   }
   $('#totop').addEventListener('click', (e) => { e.preventDefault(); window.scrollTo(0, 0); });
   window.addEventListener('hashchange', route);
-  Promise.all(DAYS.map((n) => fetch(`data/d${n}.json`).then((r) => r.json()).then((d) => {
+  Promise.all(DAYS.map((n) => fetch(`data/d${n}.json`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    if (!d) return;
     d.sort(order); d.forEach((b, i) => { b.id = i + 1; }); D[n] = d;
-  }))).then(route);
+  }).catch(() => {}))).then(route);
 })();

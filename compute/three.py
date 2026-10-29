@@ -10,9 +10,9 @@ from collections import defaultdict
 
 ROLES = {'M': 1, 'H': 1, 'C': 1, 'X': 1, 'W': 3, 'V': 4}   # 占い師は扱わない（占いの白黒は無視）
 RN = {'M': '霊能者', 'H': '狩人', 'C': '猫又', 'X': '狂人', 'W': '狼', 'V': '村人'}
-LABELS = ['霊', '狩', 'ギドラ', '猫', '灰']
+LABELS = ['霊', '狩', 'ギ', '猫', '灰']
 # CO者の正体の候補。猫は特別：猫又は役欠けがないので、猫COが1人なら本物（道連れが起きていない前提）。2人以上なら1人が本物、残りは偽（狂人・狼）
-CAN = {'霊': 'MXW', '狩': 'HXW', 'ギドラ': 'HCXW', '灰': 'VHCXW'}
+CAN = {'霊': 'MXW', '狩': 'HXW', 'ギ': 'HCXW', '灰': 'VHCXW'}
 SHORT = {'M': '真', 'H': '狩', 'C': '猫', 'X': '狂', 'W': '狼'}
 
 def boards(n=3):
@@ -59,11 +59,11 @@ def describe(board, roles, src):
     if any(l == '灰' and r == 'C' for l, r in zip(board, roles)): hid.append('猫生存')
     if hid: st += '（' + '・'.join(hid) + '）'
     det = []
-    for l in ('霊', '狩', 'ギドラ', '猫'):
+    for l in ('霊', '狩', 'ギ', '猫'):
         rs = [r for b, r in zip(board, roles) if b == l]
         if not rs: continue
         if l == '猫' and len(rs) == 1: continue          # 1人なら本物で決まり
-        if l == 'ギドラ': det.append('ギドラ' + ''.join(SHORT[r] for r in sorted(rs, key='HCXW'.index)))
+        if l == 'ギ': det.append('ギ' + ''.join(SHORT[r] for r in sorted(rs, key='HCXW'.index)))
         elif l == '猫': det.append('猫' + ''.join({'C': '真', 'X': '狂', 'W': '狼'}[r] for r in sorted(rs, key='CXW'.index)))
         else: det.append(l + ''.join({'M': '真', 'H': '真', 'X': '狂', 'W': '狼'}[r] for r in sorted(rs, key='MHXW'.index)))
     if any(l == '灰' and r == 'W' for l, r in zip(board, roles)): det.append('灰に狼' if board.count('灰') > 1 else '灰が狼')

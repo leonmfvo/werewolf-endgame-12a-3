@@ -4,7 +4,7 @@
 
 - 公開ページ：https://leonmfvo.github.io/werewolf-endgame-12a-3/
 - `index.html` / `app.js` / `style.css`：表示ページ（1枚）。`data/d<人数>.json` を読み、`#3-12` のような URL で盤面を開く
-- `data/d3.json`：3人日の全盤面（霊・狩・ギドラ・猫・灰の組み合わせ。占いの白黒はまだ使わない）
-- `compute/three.py`：3人日の計算（`python3 compute/three.py data/d3.json`）
+- `data/d3.json`：3人日の全盤面（霊・猫・ギ・狩・灰の組み合わせ。投票まで含めて各人の視点で解く）
+- `compute/vote3.py`：3人日の計算（`python3 compute/vote3.py data/d3.json`）
 
 今後：4人日以上（11人日まで）を同じ形で足していく。

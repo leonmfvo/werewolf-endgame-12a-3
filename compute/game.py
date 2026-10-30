@@ -49,10 +49,11 @@ def situation(board, roles, alive=None):
 
 # ---------------------------------------------------------------- 木
 class Node:
-    __slots__ = ('kind', 'ch', 'v', 'info', 'agent', 'opts', 'tag')
+    __slots__ = ('kind', 'ch', 'v', 'info', 'agent', 'opts', 'tag', 'fch', 'fv')
     # kind: 'L' 終局（v）/ 'C' 偶然（ch=[(p, node)]）/ 'A' 人外の選択（agent, info, opts=[label], ch=[node]）
     def __init__(self, kind, **kw):
         self.kind = kind; self.ch = None; self.v = None; self.info = None; self.agent = None; self.opts = None; self.tag = None
+        self.fch = None; self.fv = None
         for k, x in kw.items(): setattr(self, k, x)
 
 def leaf(v): return Node('L', v=F(v))
@@ -257,6 +258,7 @@ def agents_infosets(root):
     return byinfo, order
 
 def evaluate(root, pol):
+    """厳密な値（分数）"""
     memo = {}
     def v(nd):
         k = id(nd)
@@ -267,19 +269,42 @@ def evaluate(root, pol):
         memo[k] = r; return r
     return v(root)
 
+def to_float(root):
+    """探索用に確率と値を小数にしておく（探索は小数で速く、最後の値だけ分数で求める）"""
+    stack = [root]; seen = set()
+    while stack:
+        nd = stack.pop()
+        if id(nd) in seen: continue
+        seen.add(id(nd))
+        if nd.kind == 'L': nd.fv = float(nd.v)
+        elif nd.kind == 'C':
+            nd.fch = [(float(p), c) for p, c in nd.ch]; stack.extend(c for _, c in nd.ch)
+        else: stack.extend(nd.ch)
+
+def evaluate_f(root, pol):
+    memo = {}
+    def v(nd):
+        k = id(nd)
+        if k in memo: return memo[k]
+        if nd.kind == 'L': r = nd.fv
+        elif nd.kind == 'C': r = sum(p * v(c) for p, c in nd.fch)
+        else: r = v(nd.ch[pol[(nd.agent, nd.info)]])
+        memo[k] = r; return r
+    return v(root)
+
 def reach_others(root, pol, agent):
-    """agent 以外（偶然・ほかの人外）の到達確率"""
-    reach = defaultdict(F)
+    """agent 以外（偶然・ほかの人外）の到達確率（小数）"""
+    reach = defaultdict(float)
     def walk(nd, p):
         if p == 0: return
         if nd.kind == 'C':
-            for q, c in nd.ch: walk(c, p * q)
+            for q, c in nd.fch: walk(c, p * q)
         elif nd.kind == 'A':
             reach[id(nd)] += p
             if nd.agent == agent:
                 for c in nd.ch: walk(c, p)
             else: walk(nd.ch[pol[(nd.agent, nd.info)]], p)
-    walk(root, F(1))
+    walk(root, 1.0)
     return reach
 
 def best_response(root, pol, agent, byinfo, order):
@@ -291,15 +316,16 @@ def best_response(root, pol, agent, byinfo, order):
         best = None
         for a in range(len(nds[0].opts)):
             pol[key] = a
-            tot = F(0)
+            tot = 0.0
             for nd in nds:
                 r = reach.get(id(nd), 0)
-                if r: tot += r * evaluate(nd.ch[a], pol)
-            if best is None or tot < best[0]: best = (tot, a)
+                if r: tot += r * evaluate_f(nd.ch[a], pol)
+            if best is None or tot < best[0] - 1e-12: best = (tot, a)
         pol[key] = best[1]
     return pol
 
 def solve_adv(root, starts=15):
+    if root.fch is None: to_float(root)
     byinfo, order = agents_infosets(root)
     best = None
     import random
@@ -310,11 +336,11 @@ def solve_adv(root, starts=15):
         for it in range(20):
             for ag in ('W', 'X'):
                 pol = best_response(root, pol, ag, byinfo, order)
-            v = evaluate(root, pol)
-            if prev is not None and v >= prev: break
+            v = evaluate_f(root, pol)
+            if prev is not None and v >= prev - 1e-12: break
             prev = v
-        if best is None or v < best[0]: best = (v, pol)
-    return best
+        if best is None or v < best[0] - 1e-12: best = (v, pol)
+    return evaluate(root, best[1]), best[1]   # 値は分数で厳密に
 
 def solve_adv_exact(root, limit=200000):
     """人外の手をすべて試す（情報集合が少ないときだけ）。各自の視点の範囲で2人で一番村に不利な組み合わせ"""

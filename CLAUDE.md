@@ -16,7 +16,7 @@ Run these from the repo root. Python modules import each other by bare name, so 
 python3 compute/vote3.py data/d3.json                       # 3人日: exact solve + page text (~1 min)
 python3 compute/run45.py 4 data/plans4.json 4               # 4人日: try all village plan candidates (4 procs)
 python3 compute/analyze45.py 4 data/plans4.json data/d4.json  # 4人日: page JSON from the ranked plans
-python3 compute/run45.py 5 data/plans5.json 4               # 5人日: hours; resumable, saves after each board
+python3 compute/run45.py 5 data/plans5.json 4               # 5人日: resumable; checkpoints each candidate in data/plans5.json.partial/
 python3 -m http.server 8766                                 # preview locally, open /#3-1 etc.
 ```
 
@@ -49,6 +49,7 @@ These came out of correcting mistakes with the user. Don't regress them.
    - `plans.py` defines the candidates: designation order / designate-vs-spread voting / true claimants vote their 対抗 / guard order / hunter CO after GJ.
    - `game.Game` builds an explicit tree: public votes, ties random, 猫又 drag on hang, wolf death on 猫噛み, consecutive guard allowed, GJ, hunter CO.
    - Adversary best response is person-by-person search with random restarts (`solve_adv`, 15 starts). This is heuristic: a single start was shown to get stuck. `solve_adv_exact` (full enumeration) exists for small trees to validate it.
+   - The search runs on floats (`to_float`, `evaluate_f`); only the final value of the chosen policy is recomputed exactly with `Fraction` (`evaluate`). This was about 50× faster and reproduced every 4人日 value.
    - `run45` screens all candidates with 2 restarts, then re-solves the top 8 with 15.
    - Validation targets: the 4人日 霊,猫,灰,灰 page must give 1w生存 1/2 and 1w1k生存 1/4 (matches the reference wiki). The 3人日 candidate solver must equal the exact one except where fine mixing matters.
 5. Nodes carry `tag`s (`吊`, `噛み`, `GJ`, `翌日`…) used only by `analyze45.paths` to write the "how it ends" explanations. Tags must not change values.

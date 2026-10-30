@@ -42,7 +42,7 @@ if __name__ == '__main__':
     print(len(results), 'done,', len(bs), 'to do', flush=True)
     with Pool(int(sys.argv[3]) if len(sys.argv) > 3 else 4) as pool:
         for board, res, dt, k in pool.imap_unordered(job, bs):
-            if res is None: continue
-            results[','.join(board)] = res
+            results[','.join(board)] = res or []   # 配役から起こらない盤面は空で記録
+            if not res: continue
             print(','.join(board), res[0][0], round(float(F(res[0][0])) * 100, 1), '%', k, 'plans', round(dt), 's', flush=True)
             json.dump(results, open(out + '.tmp', 'w'), ensure_ascii=False); os.replace(out + '.tmp', out)

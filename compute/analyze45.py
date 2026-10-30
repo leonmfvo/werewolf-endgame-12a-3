@@ -107,6 +107,7 @@ if __name__ == '__main__':
     R = json.load(open(src))
     out = []
     for key, ranked in R.items():
+        if not ranked: continue
         ranked = [(F(v), p) for v, p in ranked]
         out.append(board_text(key.split(','), ranked))
         print(key, out[-1]['v'], flush=True)

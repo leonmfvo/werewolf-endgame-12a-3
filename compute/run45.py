@@ -16,13 +16,22 @@ def boards(n):
 
 def job(board):
     t = time.time()
+    # 1段目：やり直し2回で全候補をふるいにかける（人外の最善を見逃すと値は高めに出るので、上位を取りこぼしにくい）
     res = []
     for plan in candidates(board):
         g = Game(board, plan); root, ws = g.root()
         if not ws: return board, None, 0, 0
-        v, pol = solve_adv(root)
+        v, pol = solve_adv(root, starts=2)
         res.append((v, plan))
     res.sort(key=lambda x: -x[0])
+    # 2段目：上位8つをやり直し15回で詰め直す
+    top = []
+    for v0, plan in res[:8]:
+        g = Game(board, plan); root, ws = g.root()
+        v, pol = solve_adv(root, starts=15)
+        top.append((min(v, v0), plan))
+    top.sort(key=lambda x: -x[0])
+    res = top + res[8:]
     return board, [(str(v), p) for v, p in res], time.time() - t, len(res)
 
 if __name__ == '__main__':

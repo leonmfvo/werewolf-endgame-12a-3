@@ -16,7 +16,7 @@ Run these from the repo root. Python modules import each other by bare name, so 
 python3 compute/vote3.py data/d3.json                       # 3人日: exact solve + page text (~1 min)
 python3 compute/run45.py 4 data/plans4.json 4               # 4人日: try all village plan candidates (4 procs)
 python3 compute/analyze45.py 4 data/plans4.json data/d4.json  # 4人日: page JSON from the ranked plans
-python3 compute/run45.py 5 data/plans5.json 4               # 5人日: resumable; checkpoints each candidate in data/plans5.json.partial/
+python3 compute/run45.py 5 data/plans5.json 1               # 5人日: resumable; checkpoints each candidate in data/plans5.json.partial/. Use 1 process: candidates with co=False (hunter stays hidden after GJ) build ~7GB trees, and parallel workers get OOM-killed and silently hang the Pool
 python3 -m http.server 8766                                 # preview locally, open /#3-1 etc.
 ```
 

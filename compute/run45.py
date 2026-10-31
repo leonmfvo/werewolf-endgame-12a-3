@@ -64,8 +64,11 @@ if __name__ == '__main__':
     print(len(results), 'done,', len(bs), 'to do', flush=True)
     partial = out + '.partial'
     os.makedirs(partial, exist_ok=True)
-    with Pool(int(sys.argv[3]) if len(sys.argv) > 3 else 4) as pool:
-        for board, res, dt, k in pool.imap_unordered(job, [(b, partial) for b in bs]):
+    npar = int(sys.argv[3]) if len(sys.argv) > 3 else 4
+    # 重い盤面は1つで数GB使うので、並列数1なら Pool を使わずに順に解く（メモリ不足で止まったときに気づける）
+    it = map(job, [(b, partial) for b in bs]) if npar == 1 else Pool(npar).imap_unordered(job, [(b, partial) for b in bs])
+    if True:
+        for board, res, dt, k in it:
             results[','.join(board)] = res or []   # 配役から起こらない盤面は空で記録
             if not res:
                 json.dump(results, open(out + '.tmp', 'w'), ensure_ascii=False); os.replace(out + '.tmp', out)

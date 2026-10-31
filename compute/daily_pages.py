@@ -83,10 +83,11 @@ def run_plan(labels, worlds, plan, pol=None, with_paths=False):
     if pol is None: pol = adv_policy(labels, worlds, plan)[1]
     g = Game(labels, plan, start=worlds)
     ns = next_states(g, pol)
-    GM.MODE.update(exact=True, tags=with_paths)
     st0 = dict(alive=tuple(range(len(labels))), lab=tuple(labels), hist=())
     per = []
     for p, roles, know in worlds:
+        # 翌日の状態を解くと MODE が変わるので、内訳ごとに設定し直す（目印が切れて「〇〇を吊る」が抜けていた）
+        GM.MODE.update(exact=True, tags=with_paths)
         nd = g.day(roles, dict(st0, bites=tuple(know)))
         pt = walk(labels, roles, nd, pol, ns, reg=with_paths)
         per.append((sum(x[1] for x in pt.values()), pt))

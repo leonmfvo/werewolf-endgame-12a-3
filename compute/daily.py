@@ -67,46 +67,145 @@ def outcomes(root, pol, exact):
         else: stack.append((nd.ch[pol.get((nd.agent, nd.info), 0)], p))
     return term, nxt
 
+FCACHE = {}   # 探索中（小数）の翌日の状態 → 村勝率（小数）。同じ状態を何度も正規形にしないため
+
 def total(root, pol, exact=False):
     term, nxt = outcomes(root, pol, exact)
     v = term
     for (hist, al, lab), ws in nxt.items():
         mass = sum(p for p, _, _ in ws)
         idx = {old: new for new, old in enumerate(al)}
-        worlds = [(F(p) if exact else F(p).limit_denominator(10**12), tuple(r[i] for i in al), tuple(idx[k] for k in kn)) for p, r, kn in ws]
-        key = canon([lab[i] for i in al], worlds)
-        x = value(key)
-        v += mass * (x if exact else float(x))
+        labs = tuple(lab[i] for i in al)
+        if not exact:
+            fk = (labs, frozenset((tuple(r[i] for i in al), tuple(idx[k] for k in kn), round(p / mass, 12)) for p, r, kn in ws))
+            x = FCACHE.get(fk)
+            if x is None:
+                worlds = [(F(p / mass).limit_denominator(10**9), tuple(r[i] for i in al), tuple(idx[k] for k in kn)) for p, r, kn in ws]
+                x = float(value(canon(list(labs), worlds))); FCACHE[fk] = x
+            v += mass * x
+            continue
+        worlds = [(F(p), tuple(r[i] for i in al), tuple(idx[k] for k in kn)) for p, r, kn in ws]
+        v += mass * value(canon(list(labs), worlds))
     return v
 
-def adversary_min(root, starts=6):
-    byinfo, order = agents_infosets(root)
-    keys = sorted(byinfo, key=lambda k: -order[k])
+class Flat:
+    """1日分の木を「行き着く先」の並びに平らにして、人外の手を1か所変えたときに、影響する行き先だけを足し引きする（探索を速くする）"""
+    def __init__(self, root):
+        self.keys = {}; self.opts = []          # 情報集合 → 番号、選択肢の数
+        self.leaves = []                       # (確率, 条件 [(情報集合番号, 手)], 決着の値 or None, 翌日の状態, 世界)
+        stack = [(root, 1.0, ())]
+        while stack:
+            nd, p, req = stack.pop()
+            if p == 0: continue
+            if nd.kind == 'L': self.leaves.append((p, req, float(nd.v), None, None))
+            elif nd.kind == 'N':
+                hist, al, lab, roles, know = nd.info
+                idx = {old: new for new, old in enumerate(al)}
+                self.leaves.append((p, req, None, (hist, al, lab), (tuple(roles[i] for i in al), tuple(idx[k] for k in know))))
+            elif nd.kind == 'C':
+                for q, c in nd.ch: stack.append((c, p * float(q), req))
+            else:
+                k = (nd.agent, nd.info)
+                if k not in self.keys: self.keys[k] = len(self.opts); self.opts.append(len(nd.opts))
+                i = self.keys[k]
+                for a, c in enumerate(nd.ch): stack.append((c, p, req + ((i, a),)))
+        self.by = defaultdict(list)
+        for li, (p, req, tv, ok, wd) in enumerate(self.leaves):
+            for ia in req: self.by[ia].append(li)
+        self.order = list(range(len(self.opts)))
+
+    def setup(self, pol):
+        self.pol = list(pol)
+        self.term = 0.0; self.mass = defaultdict(lambda: defaultdict(float)); self.labs = {}
+        self.active = [False] * len(self.leaves)
+        self.contrib = {}; self.sumc = 0.0; self.dirty = set()
+        for li, (p, req, tv, ok, wd) in enumerate(self.leaves):
+            if all(self.pol[i] == a for i, a in req): self.add(li, 1)
+        return self.value()
+
+    def add(self, li, sgn):
+        p, req, tv, ok, wd = self.leaves[li]
+        self.active[li] = sgn > 0
+        if tv is not None: self.term += sgn * p * tv
+        else:
+            self.mass[ok][wd] += sgn * p
+            self.dirty.add(ok)
+
+    def outcome_value(self, ok):
+        ws = {w: m for w, m in self.mass[ok].items() if m > 1e-15}
+        mass = sum(ws.values())
+        if mass <= 1e-15: return 0.0
+        hist, al, lab = ok
+        labs = tuple(lab[i] for i in al)
+        fk = (labs, frozenset((r, kn, round(m / mass, 12)) for (r, kn), m in ws.items()))
+        x = FCACHE.get(fk)
+        if x is None:
+            worlds = [(F(m / mass).limit_denominator(10**9), r, kn) for (r, kn), m in ws.items()]
+            x = float(value(canon(list(labs), worlds))); FCACHE[fk] = x
+        return mass * x
+
+    def value(self):
+        """変わった行き先（dirty）だけ村勝率を求め直す"""
+        for ok in self.dirty:
+            new = self.outcome_value(ok)
+            self.sumc += new - self.contrib.get(ok, 0.0); self.contrib[ok] = new
+        self.dirty.clear()
+        return self.term + self.sumc
+
+    def change(self, i, a):
+        """情報集合 i の手を a に変え、影響した分だけ足し引きする"""
+        old = self.pol[i]
+        for li in self.by[(i, old)]:
+            if self.active[li]: self.add(li, -1)
+        self.pol[i] = a
+        for li in self.by[(i, a)]:
+            p, req, tv, ok, wd = self.leaves[li]
+            if all(self.pol[j] == b for j, b in req): self.add(li, 1)
+
+def adversary_min(root, starts=9):
+    fl = Flat(root)
+    n = len(fl.opts)
     best = None
     for s in range(starts):
         rnd = random.Random(s)
-        pol = {k: (0 if s == 0 else rnd.randrange(len(byinfo[k][0].opts))) for k in keys}
-        cur = total(root, pol)
+        pol = [0 if s == 0 else rnd.randrange(fl.opts[i]) for i in range(n)]
+        cur = fl.setup(pol)
+        # 見る順番：前から・後ろから・ばらばら（順番しだいで行き着く手が変わるので、いくつか試して一番低いものを取る）
+        order = list(range(n)) if s % 3 == 0 else (list(range(n))[::-1] if s % 3 == 1 else rnd.sample(range(n), n))
         improved = True
         while improved:
             improved = False
-            for k in keys:
-                for a in range(len(byinfo[k][0].opts)):
-                    if a == pol[k]: continue
-                    old = pol[k]; pol[k] = a
-                    v = total(root, pol)
+            for i in order:
+                for a in range(fl.opts[i]):
+                    old = fl.pol[i]
+                    if a == old: continue
+                    fl.change(i, a)
+                    v = fl.value()
                     if v < cur - 1e-12: cur = v; improved = True
-                    else: pol[k] = old
-        if best is None or cur < best[0] - 1e-12: best = (cur, dict(pol))
+                    else: fl.change(i, old)
+        if best is None or cur < best[0] - 1e-12:
+            best = (cur, {k: fl.pol[i] for k, i in fl.keys.items()})
     return best
 
 def solve_day(key, labels, worlds):
-    best = None
+    start = [(p, r, kn) for p, r, kn in worlds]
+    # 1段目：全候補を、人外の探索1回でふるう（人外の最善を見逃すと値は高めに出るので、上位を取りこぼしにくい）
+    scr = []
     for plan in candidates(labels):
-        GM.MODE.update(exact=True, tags=False)
-        g = Game(labels, plan, start=[(p, r, kn) for p, r, kn in worlds]); root, _ = g.root()
+        GM.MODE.update(exact=False, tags=False)   # 探索は小数の木で
+        g = Game(labels, plan, start=start); root, _ = g.root()
+        vf, pol = adversary_min(root, starts=1)
+        scr.append((vf, plan))
+    scr.sort(key=lambda x: -x[0])
+    # 2段目：上位5つを、やり直し6回で詰め直し、値は分数の木で厳密に
+    best = None
+    for vf0, plan in scr[:5]:
+        GM.MODE.update(exact=False, tags=False)
+        g = Game(labels, plan, start=start); root, _ = g.root()
         vf, pol = adversary_min(root)
         if best is not None and vf < float(best[0]) - 1e-9: continue
+        GM.MODE.update(exact=True, tags=False)    # 値は分数の木で厳密に
+        root, _ = g.root()
         v = total(root, pol, exact=True)
         if best is None or v > best[0]: best = (v, plan, pol)
     INFO[key] = dict(plan=best[1])

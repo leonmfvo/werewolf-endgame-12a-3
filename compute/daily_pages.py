@@ -89,6 +89,7 @@ def world_values(key):
         R = G3.solve_board(labels, cases=[(p, r) for p, r, kn in worlds], extras=[kn for p, r, kn in worlds])
         vals = R['per'] if R else [F(0)] * len(worlds)
     else:
+        D.value(key)   # 辞書になければ解いて、進め方を INFO に入れる
         vals = [v for v, _ in run_plan(labels, worlds, D.INFO[key]['plan'])]
     WV[key] = {(r, tuple(kn)): v for (p, r, kn), v in zip(worlds, vals)}
     tot = sum(p * v for (p, r, kn), v in zip(worlds, vals))

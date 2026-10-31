@@ -23,6 +23,9 @@ def canon(labels, worlds, with_pos=False):
         if groups and labels[groups[-1][0]] == labels[i]: groups[-1].append(i)
         else: groups.append([i])
     perms = [list(itertools.permutations(g)) for g in groups]
+    merged = defaultdict(F)   # 同じ（役, 狼が知っている人）の内訳はまとめる（1/13 と 2/13 のように分かれたままだと、同じ状態が別のキーになる）
+    for p, r, know in worlds: merged[(tuple(r), tuple(sorted(know)))] += F(p)
+    worlds = [(p, r, kn) for (r, kn), p in merged.items()]
     best = None
     tot = sum(p for p, _, _ in worlds)
     for combo in itertools.product(*perms):
@@ -198,16 +201,11 @@ def solve_day(key, labels, worlds):
         vf, pol = adversary_min(root, starts=1)
         scr.append((vf, plan))
     scr.sort(key=lambda x: -x[0])
-    # 2段目：上位の候補を、やり直し9回で詰め直し、値は分数の木で厳密に。
-    # 護衛先などだけが違って1段目の値が同じ候補は同じ系統として1つにまとめる（同じ値の候補で枠が埋まり、別の系統を取りこぼさないように）
-    top, seen = [], set()
+    # 2段目：1段目の値の高い順に、やり直し9回で詰め直す。9回のうち1回目は1段目と同じ探索なので、詰め直した値は1段目の値以下。
+    # よって1段目の値がここまでの最善以下になったら、残りの候補が最善を超えることはない（全候補を9回ずつ探索した最大と一致する）
+    best = None; bestf = None
     for vf0, plan in scr:
-        fam = (plan['des'], plan['counter'], plan['mode'], round(vf0, 9))
-        if fam in seen: continue
-        seen.add(fam); top.append(plan)
-        if len(top) == 8: break
-    best = None
-    for plan in top:
+        if bestf is not None and vf0 <= bestf + 1e-12: break
         GM.MODE.update(exact=False, tags=False)
         g = Game(labels, plan, start=start); root, _ = g.root()
         vf, pol = adversary_min(root)
@@ -216,6 +214,7 @@ def solve_day(key, labels, worlds):
         root, _ = g.root()
         v = total(root, pol, exact=True)
         if best is None or v > best[0]: best = (v, plan, pol)
+        bestf = vf if bestf is None else max(bestf, vf)
     INFO[key] = dict(plan=best[1])
     return best[0]
 

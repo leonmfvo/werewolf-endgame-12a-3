@@ -52,6 +52,8 @@ These came out of correcting mistakes with the user. Don't regress them.
    - The search runs on floats (`to_float`, `evaluate_f`); only the final value of the chosen policy is recomputed exactly with `Fraction` (`evaluate`). This was about 50× faster and reproduced every 4人日 value.
    - `run45` screens all candidates with 2 restarts, then re-solves the top 8 with 15.
    - Validation targets: the 4人日 霊,猫,灰,灰 page must give 1w生存 1/2 and 1w1k生存 1/4 (matches the reference wiki). The 3人日 candidate solver must equal the exact one except where fine mixing matters.
+   - Memory: `game.MODE` (`exact=False, tags=False`) builds the search tree with float probabilities and no tag nodes. The exact value of the chosen adversary policy is then recomputed world by world (`Game.exact_value`, `evaluate(..., default=0)`). `analyze45` does the same per world. This reproduced every 4人日 value and page exactly.
+   - **No approximations in published values.** The user requires zero difference from the full computation (not even 0.001). `refs.py` / `Game(ref=…)` replace the next day by the stored 3・4人日 per-world values. That is only an approximation: the next day's 内訳 proportions, the wolves' private knowledge (whom they bit) and the village plan continuing from the previous day all differ from a fresh board. On 4人日 it gave mean 0.2pt, max 5.7pt differences, so it is off by default (`USE_REF=1` enables it). Exact decomposition into "next boards" would require next-day states to carry the posterior and private knowledge, and their solutions to use the same continuation strategies.
 5. Nodes carry `tag`s (`吊`, `噛み`, `GJ`, `翌日`…) used only by `analyze45.paths` to write the "how it ends" explanations. Tags must not change values.
 
 ## Page data and viewer

@@ -14,13 +14,13 @@ Run these from the repo root. Python modules import each other by bare name, so 
 
 ```sh
 python3 compute/vote3.py data/d3.json                       # 3人日: exact solve + page text (~1 min)
-python3 compute/run45.py 4 data/plans4.json 4               # 4人日: try all village plan candidates (4 procs)
-python3 compute/analyze45.py 4 data/plans4.json data/d4.json  # 4人日: page JSON from the ranked plans
-python3 compute/run45.py 5 data/plans5.json 1               # 5人日: resumable; checkpoints each candidate in data/plans5.json.partial/. Use 1 process: candidates with co=False (hunter stays hidden after GJ) build ~7GB trees, and parallel workers get OOM-killed and silently hang the Pool
+cd compute && python3 -u rundaily.py 4 5                    # 4・5人日: daily dictionary method; grows data/dict.json (resumable), writes data/daily{n}.json
+cd compute && python3 -u daily_pages.py 4 ../data/d4.json     # page JSON from the dictionary (same for 5)
+python3 compute/run45.py 4 data/plans4.json 4               # OLD full-tree method (superseded; kept for comparison)
 python3 -m http.server 8766                                 # preview locally, open /#3-1 etc.
 ```
 
-`run45.py` resumes from whatever is already in its output file. Boards that the role counts make impossible are stored as `[]`, and `analyze45.py` skips them. The 5人日 runs exceed the 2-hour background-task limit, so restart them and they continue where they stopped.
+`rundaily.py` saves `data/dict.json` after every board and loads it on start, so a stopped run continues. Delete `dict.json` whenever solver logic changes (the stored values depend on it). Start long runs with `nohup … &` (the 2-hour background-task limit), and never `pkill -f` a pattern that also matches your own shell command (exit 144 kills the shell).
 
 To check a page in a headless browser, use Playwright, which is preinstalled (`require('playwright')`, `chromium.launch()`). Pages must not scroll horizontally at 390px width.
 
@@ -54,7 +54,14 @@ These came out of correcting mistakes with the user. Don't regress them.
    - Validation targets: the 4人日 霊,猫,灰,灰 page must give 1w生存 1/2 and 1w1k生存 1/4 (matches the reference wiki). The 3人日 candidate solver must equal the exact one except where fine mixing matters.
    - Memory: `game.MODE` (`exact=False, tags=False`) builds the search tree with float probabilities and no tag nodes. The exact value of the chosen adversary policy is then recomputed world by world (`Game.exact_value`, `evaluate(..., default=0)`). `analyze45` does the same per world. This reproduced every 4人日 value and page exactly.
    - **No approximations in published values.** The user requires zero difference from the full computation (not even 0.001). `refs.py` / `Game(ref=…)` replace the next day by the stored 3・4人日 per-world values. That is only an approximation: the next day's 内訳 proportions, the wolves' private knowledge (whom they bit) and the village plan continuing from the previous day all differ from a fresh board. On 4人日 it gave mean 0.2pt, max 5.7pt differences, so it is off by default (`USE_REF=1` enables it). Exact decomposition into "next boards" would require next-day states to carry the posterior and private knowledge, and their solutions to use the same continuation strategies.
-5. Nodes carry `tag`s (`吊`, `噛み`, `GJ`, `翌日`…) used only by `analyze45.paths` to write the "how it ends" explanations. Tags must not change values.
+5. **Daily dictionary method (`daily.py`) is the current 4人日+ solver** (the user's design: reduce to fewer-person states, add missing states to a dictionary).
+   - A state is (labels, posterior over (roles, humans the wolves know survived a bite)), canonicalised over permutations of same-label seats (`canon`). Same-looking boards with different 内訳 proportions are different states, so decomposition is exact by definition.
+   - `value(key)`: ≤3 alive → `vote3g.solve_board(labels, cases, extras)` (exact); otherwise `solve_day`: `Game(start=…)` stops at the next morning ('N' nodes); the next state's value comes from the dictionary (solved on demand).
+   - `solve_day`: stage 1 screens every candidate with 1 adversary start; stage 2 re-solves 8 plans with 9 starts in forward / reverse / random orders (`adversary_min`). Stage 2 merges plans of the same (des, counter, mode) with equal stage-1 value: otherwise guard/co variants with tied values filled the slots and better families were missed (5 boards on 4人日). The final value is recomputed with Fraction.
+   - `Flat` evaluates incrementally (only changed leaves and dirty next states); `FCACHE` caches float next-state values.
+   - Validation: 4人日 dict equals max over all candidates (9 starts each) on all 68 boards. Old full-tree 4人日 values that were higher came from the old adversary search getting stuck (e.g. 霊,霊,霊,白: 31/135 → 101/540, and the full tree with the new search gives the same).
+   - `daily_pages.py` recomputes per-world values (`world_values`, recursively for next states via the same plan and deterministic search) and asserts their mean equals the dictionary value.
+6. Nodes carry `tag`s (`吊`, `噛み`, `GJ`, `翌日`…) used only by `analyze45.paths` to write the "how it ends" explanations. Tags must not change values.
 
 ## Page data and viewer
 
@@ -62,7 +69,7 @@ These came out of correcting mistakes with the user. Don't regress them.
   - `board`, `v`, `plan`, `va`/`plana` (the best other "all-in / 1/2-split" plan)
   - `secs[]`: a title like `1w1k生存で猫に狂`, a share, and `items[]`. Each item has `plan`, `best`, `fixed` votes and `terms` (factors + 猫飛び/ランダム outcome).
   - `summ[]`: per-situation values.
-- `d4.json` / `d5.json` come from `analyze45.board_text`. Their items have `paths` (`[label, prob, win]`) instead of `terms`.
+- `d4.json` / `d5.json` come from `daily_pages.board_page` (via `analyze45.assemble`). Their items have `paths` (`[label, prob, win]`) instead of `terms`.
 - `app.js` loads `data/d{3,4,5}.json` and ignores missing files. It sorts boards by counts of 霊 → 猫+ギ → 狩 → 灰, descending, and routes `#<n>-<id>[-c<k>|-sum]`. It renders fractions with `\tfrac` through KaTeX and falls back to plain text.
 - Writing style follows the user's reference (ゲヘナのwiki, FC2): dense text, a heading per situation, a comparison of progressions, and derivations as fraction products such as `狼が真猫に入れる(1/2)×猫飛び(1/2)=1/4`. The user explicitly wants compact, FC2-like density, so keep spacing tight.
 

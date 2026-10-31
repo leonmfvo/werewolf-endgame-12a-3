@@ -269,10 +269,9 @@ class Game:
     def night(self, roles, st):
         cl = self.chain_label(st)
         if cl is None: return self.night_c(roles, st, None)
-        # 名指しの順は公開のくじで決める（同じ見た目の人どうしなので、どの並びも同じ確率）
-        mem = [i for i in st['alive'] if st['lab'][i][0] == cl]
-        perms = list(itertools.permutations(mem))
-        return chance([(F(1, len(perms)), self.night_c(roles, st, p)) for p in perms])
+        # 名指しの順は村が決めて公開する（席の順に A, B, C…）。同じ見た目の人どうしは入れ替えても同じなので、くじで並べる必要はない
+        mem = tuple(i for i in st['alive'] if st['lab'][i][0] == cl)
+        return self.night_c(roles, st, mem)
 
     def night_c(self, roles, st, chain):
         if chain is not None: st = dict(st, hist=st['hist'] + (('chain', chain),))   # 名指しの順は公開（翌朝、村は夜の結果と合わせて推理できる）

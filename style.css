@@ -94,9 +94,5 @@ ol.terms li{margin:0 0 4px}
 .tm{display:inline-block;max-width:100%;vertical-align:middle;overflow-x:auto}
 ol.terms li{margin:0 0 2px}
 .tm .katex,.total .katex,table.cmp .katex,.headline .katex{font-size:1.25em}
-/* 翌日の状態（道すじから開く） */
-.nx{font-size:.88em;color:var(--muted);margin:1px 0 0 .5em}
-.nx a{white-space:nowrap}
-.st{border-left:3px solid var(--border);background:var(--side);margin:3px 0 4px .3em;padding:3px 6px}
-.st .sh{margin-top:4px}
-.st table.cmp{margin:3px 0}
+/* 翌日の状態へのリンク（道すじの中の盤面） */
+a.nxl{font-weight:700;background:var(--hl);padding:0 3px;border-radius:3px}

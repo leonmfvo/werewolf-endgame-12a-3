@@ -81,40 +81,46 @@
     return w.length ? w.join(' × ') : '必ず狼が吊られる';
   }
 
-  // 道すじ。翌日の状態に行く行（[説明, 確率, 村勝率, 状態の番号, 翌日の状態でのこの内訳]）は、その状態を開けるようにする
+  // 道すじ。翌日の状態に行く行（[説明, 確率, 村勝率, 状態の番号, 翌日の状態でのこの内訳]）は
+  // 「〇〇の時 → 霊猫灰灰（1w1k）（村勝率 1/2）」と書き、盤面をその状態へのリンクにする
+  const sitOf = (t) => t.split('で')[0].replace('生存', '');
   function pathsHtml(n, paths, v) {
-    let h = '<ol class="terms">' + paths.map(([lab, p, w, sid, nt]) => `<li><span class="tw">${esc(lab)}</span>：<span class="tm">${tex(`${fx(p)}\\times${fx(w)} = ${fx(mul(p, w))}`)}</span>`
-      + (sid === undefined ? '' : `<div class="nx">↳ 翌日の状態でのこの内訳：${esc(nt)}（村勝率 ${tex(fx(w), w)}） <a href="#" data-nx="${n}:${sid}">▶翌日の状態を開く</a></div><div class="nxb"></div>`) + '</li>').join('') + '</ol>';
+    let h = '<ol class="terms">' + paths.map(([lab, p, w, sid, nt]) => {
+      const calc = `<span class="tm">${tex(`${fx(p)}\\times${fx(w)} = ${fx(mul(p, w))}`)}</span>`;
+      if (sid === undefined) return `<li><span class="tw">${esc(lab)}</span>：${calc}</li>`;
+      const i = lab.lastIndexOf(' → 翌日 ');
+      const pre = lab.slice(0, i), bd = lab.slice(i + 6).replace(/,/g, '');
+      return `<li><span class="tw">${esc(pre)}の時 → <a class="nxl" href="#s${n}-${sid}">${esc(bd)}</a>（${esc(sitOf(nt))}）（村勝率 ${tex(fx(w), w)}）</span>：${calc}</li>`;
+    }).join('') + '</ol>';
     if (paths.length > 1) h += `<p class="total">合計 ${tex(paths.map(([, p, w]) => fx(mul(p, w))).filter((x) => x !== '0').join('+') + ' = ' + fx(v))}</p>`;
     return h;
   }
-  // 翌日の状態（data/s<n>.json の1件）：内訳の割合、村の進め方、内訳ごとの村勝率と道すじ
+  // 翌日の状態のページ（data/s<n>.json の1件）：内訳の割合、村の進め方、内訳ごとの村勝率と道すじ
   const S = {};
-  function stateHtml(n, e) {
+  function statePage(n, sid, e) {
     const key = e.board.join(',');
     const fb = D[e.n] && D[e.n].find((x) => x.board.join(',') === key);
-    let h = `<div class="st"><div><b>翌日の状態 ${esc(key)}</b>（${e.n}人）　村勝率 ${tex(fx(e.v), e.v)} <span class="sm">${pct(e.v)}</span></div>`;
-    h += e.fresh && fb ? `<div class="sm">内訳の割合が${e.n}人日の新しい盤面と同じ → <a href="#${e.n}-${fb.id}">${e.n}人日 ${esc(key)} のページ</a></div>`
-      : `<div class="sm">見た目は${e.n}人日の ${esc(key)} でも、前の日の投票・噛みで内訳の割合が変わっているので、新しい盤面とは別の状態として解いている${fb ? `（参考：<a href="#${e.n}-${fb.id}">新しい盤面のページ</a> ${pct(fb.v)}）` : ''}。</div>`;
-    h += `<div class="sm">村の進め方：${esc(e.plan)}</div>`;
-    h += '<table class="cmp"><thead><tr><th>生存状況</th><th>割合</th><th>村勝率</th></tr></thead><tbody>' + e.summ.map((x) => `<tr><td>${esc(x.sit)}</td><td class="n sm">${pct(x.share)}</td><td class="n">${tex(fx(x.v), x.v)}</td></tr>`).join('') + '</tbody></table>';
+    let h = `<h1 class="pt">${esc(key)}<span class="day">翌日の状態（${e.n}人）</span></h1>`;
+    h += `<div class="headline"><div>村の進め方：<b>${esc(e.plan)}</b></div><div>村勝率（この状態の内訳の平均）：${tex(fx(e.v), e.v)} <span class="sm">${pct(e.v)}</span></div>`
+      + `<div class="sm">${n}人日の盤面から1日進んだ状態。見た目は${e.n}人日の ${esc(key)} でも、前の日の投票・噛みで内訳の割合が新しい盤面とは変わっているので、別の状態として解いている${fb ? `（参考：<a href="#${e.n}-${fb.id}">新しい盤面の ${esc(key)}</a> ${pct(fb.v)}）` : ''}。戻るときはブラウザの「戻る」。</div></div>`;
+    h += '<table class="cmp"><thead><tr><th>生存状況</th><th>割合</th><th>村勝率</th></tr></thead><tbody>' + e.summ.map((x) => `<tr><td>${esc(x.sit)}</td><td class="n sm">${pct(x.share)}</td><td class="n">${tex(fx(x.v), x.v)} <span class="sm">${pct(x.v)}</span></td></tr>`).join('') + '</tbody></table>';
     for (const s of e.secs) {
       const it = s.items[0];
-      h += `<div class="sh"><b>${esc(s.title)}</b>（この状態の ${pct(s.share)}）　${tex(fx(it.v), it.v)}</div>` + pathsHtml(n, it.paths, it.v);
+      h += `<h2>${esc(s.title)}<span class="day">この状態の ${pct(s.share)}</span></h2><p>村勝率 ${tex(fx(it.v), it.v)}</p>` + pathsHtml(n, it.paths, it.v);
     }
-    return h + '</div>';
+    return h;
   }
-  document.addEventListener('click', (ev) => {
-    const a = ev.target.closest('a[data-nx]');
-    if (!a) return;
-    ev.preventDefault();
-    const box = a.parentNode.nextElementSibling;
-    if (box.innerHTML) { box.innerHTML = ''; a.textContent = '▶翌日の状態を開く'; return; }
-    const [n, sid] = a.dataset.nx.split(':').map(Number);
-    const show = () => { box.innerHTML = S[n] ? stateHtml(n, S[n][sid]) : '<p class="sm">読み込めなかった</p>'; a.textContent = '▼閉じる'; };
-    if (S[n]) show();
-    else fetch(`data/s${n}.json`).then((r) => r.json()).then((d) => { S[n] = d; show(); }).catch(show);
-  });
+  function showState(n, sid) {
+    const go = () => {
+      const e = S[n] && S[n][sid];
+      if (!e) { $('#page').innerHTML = '<p>読み込めなかった</p>'; return; }
+      const fb = D[e.n] && D[e.n].find((x) => x.board.join(',') === e.board.join(','));
+      if (e.fresh && fb) { location.replace(`#${e.n}-${fb.id}`); return; }   // 新しい盤面と同じ割合なら、その盤面のページ
+      side({ n }); $('#page').innerHTML = statePage(n, sid, e); window.scrollTo(0, 0);
+      document.title = `${e.board.join(',')}（翌日の状態） - 12A猫 盤面別勝率`;
+    };
+    if (S[n]) go(); else fetch(`data/s${n}.json`).then((r) => r.json()).then((d) => { S[n] = d; go(); }).catch(go);
+  }
 
   function page(n, b) {
     // wiki（ゲヘナのwiki）の書き方を、番号・改行・数式で見やすくしたもの
@@ -147,6 +153,8 @@
   }
 
   function route() {
+    const ms = location.hash.match(/^#s(\d+)-(\d+)$/);
+    if (ms) { showState(+ms[1], +ms[2]); return; }
     const m = location.hash.match(/^#(\d+)-(\d+)(?:-((?:c\d+)|sum))?$/);
     if (m && D[+m[1]]) {
       const n = +m[1], i = +m[2], b = D[n].find((x) => x.id === i);

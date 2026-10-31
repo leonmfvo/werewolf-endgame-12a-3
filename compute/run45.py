@@ -1,16 +1,20 @@
 # 4・5人日：盤面ごとに村の進め方の候補をすべて試し、人外の最善応答（各自の視点）に対して一番勝てるものを選ぶ
-import sys, json, time, itertools
+import sys, json
+import refs, time, itertools
 from multiprocessing import Pool
 from fractions import Fraction as F
+import os
 from game import Game, solve_adv, agents_infosets, evaluate, LABELS
 from plans import candidates
 
-def boards(n):
+def boards(n, white=None):
+    if white is None: white = n <= 4
     out = []
     for c in itertools.combinations_with_replacement(LABELS, n):
         c = list(c)
         if 'ギ' in c and ('猫' in c or '狩' in c): continue
         if c.count('ギ') == 1: continue
+        if c.count('白') > (2 if white else 0): continue   # 白（狩人COで出た護衛先）は、少ない人数の参照用にだけ使う
         out.append(c)
     return out
 
@@ -36,7 +40,7 @@ def job(args):
     cands = candidates(board)
     for plan in cands:
         if key(plan) in done1: continue
-        g = Game(board, plan); root, ws = g.root()
+        g = Game(board, plan, ref=REF); root, ws = g.root()
         if not ws: return board, None, 0, 0
         v, pol = solve_adv(root, starts=2)
         done1[key(plan)] = v; st['s1'].append([str(v), plan])
@@ -47,7 +51,7 @@ def job(args):
     top = []
     for v0, plan in res[:8]:
         if key(plan) not in done2:
-            g = Game(board, plan); root, ws = g.root()
+            g = Game(board, plan, ref=REF); root, ws = g.root()
             v, pol = solve_adv(root, starts=15)
             done2[key(plan)] = v; st['s2'].append([str(v), plan])
             if path: _save(path, st)
@@ -56,8 +60,15 @@ def job(args):
     res = top + res[8:]
     return board, [(str(v), p) for v, p in res], time.time() - t, len(res)
 
+REF = {}
+def load_refs(n):
+    for k in (3, 4):
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', f'ref{k}.json')
+        if k < n and os.path.exists(p): REF[k] = refs.load(p)
+
 if __name__ == '__main__':
     n = int(sys.argv[1]); out = sys.argv[2]
+    if n >= 5: load_refs(n)   # 5人日以上は、翌日の盤面を保存済みの3・4人日の結果で置き換える
     import os
     results = json.load(open(out)) if os.path.exists(out) else {}   # 途中から再開
     bs = [b for b in boards(n) if ','.join(b) not in results]

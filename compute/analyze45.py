@@ -1,8 +1,10 @@
 # 4・5人日の結果（data/plans<n>.json）から、ページ用の説明（data/d<n>.json）を作る：
 #   盤面の最善の進め方と比較の進め方、生存状況ごとの村勝率、内訳ごとに「どう決着するか」の道すじと確率
 import sys, json
+import refs
 from fractions import Fraction as F
 from collections import defaultdict, OrderedDict
+import os
 from game import Game, solve_adv, evaluate, situation
 import wikitext as WT
 
@@ -65,7 +67,7 @@ def board_text(board, ranked):
     plans = [('g', best_plan)] + ([('a', alt[1])] if alt else [])
     runs = []
     for tag, plan in plans:
-        g = Game(board, plan); root, ws = g.root()
+        g = Game(board, plan, ref=REF); root, ws = g.root()
         v, pol = solve_adv(root)
         runs.append((tag, plan, root, ws, pol, v))
     _, _, root0, ws0, _, _ = runs[0]
@@ -102,8 +104,15 @@ def board_text(board, ranked):
                 va=fs(runs[1][5]) if len(runs) > 1 else None, plana=plan_text(runs[1][1]) if len(runs) > 1 else None,
                 secs=secs, summ=summ)
 
+REF = {}
+def load_refs(n):
+    for k in (3, 4):
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', f'ref{k}.json')
+        if k < n and os.path.exists(p): REF[k] = refs.load(p)
+
 if __name__ == '__main__':
     n = int(sys.argv[1]); src = sys.argv[2]; dst = sys.argv[3]
+    if n >= 5: load_refs(n)
     R = json.load(open(src))
     out = []
     for key, ranked in R.items():

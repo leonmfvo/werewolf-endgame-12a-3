@@ -10,8 +10,8 @@ from collections import defaultdict
 
 ROLES = {'M': 1, 'H': 1, 'C': 1, 'X': 1, 'W': 3, 'V': 4}
 VILL = set('MHCV')
-LABELS = ['霊', '猫', 'ギ', '狩', '灰']
-CAN = {'霊': 'MXW', '狩': 'HXW', 'ギ': 'HCXW', '灰': 'VHCXW'}
+LABELS = ['霊', '猫', 'ギ', '狩', '白', '灰']
+CAN = {'霊': 'MXW', '狩': 'HXW', 'ギ': 'HCXW', '白': 'VCX', '灰': 'VHCXW'}   # 白：GJの翌朝に狩人が出した護衛先（人間確定）
 
 def weight(roles):
     cnt = defaultdict(int); w = 1
@@ -69,9 +69,10 @@ def chance(lst):
 
 class Game:
     """plan: dict(des=('灰', ...), counter=True, self='next', guard=('霊', ...), co=True)"""
-    def __init__(self, board, plan):
+    def __init__(self, board, plan, ref=None):
+        """ref：{生存人数: 表}。翌日の盤面がその表にあれば、その内訳の村勝率で置き換える（refs.py）"""
         self.board = list(board); self.plan = plan; self.n = len(board)
-        self.memo = {}
+        self.memo = {}; self.ref = ref or {}
 
     def labels(self, st):
         return st['lab']
@@ -187,10 +188,20 @@ class Game:
             return chance(out)
         return self.check_then(roles, st2, 'N')
 
+    def next_day(self, roles, st):
+        """翌日：保存済みの少ない人数の結果があれば、その内訳の村勝率を使う"""
+        al = st['alive']
+        tab = self.ref.get(len(al))
+        if tab is not None:
+            from refs import key_of
+            v = tab.get(key_of([st['lab'][i] for i in al], [roles[i] for i in al]))
+            if v is not None: return tagged(('翌日', al, st['lab'], 'ref'), leaf(v))
+        return tagged(('翌日', al, st['lab']), self.day(roles, st))
+
     def check_then(self, roles, st, nxt):
         t = self.wins(roles, st['alive'])
         if t is not None: return leaf(t)
-        return self.night(roles, st) if nxt == 'N' else tagged(('翌日', st['alive'], st['lab']), self.day(roles, st))
+        return self.night(roles, st) if nxt == 'N' else self.next_day(roles, st)
 
     # ---- 夜
     def guard_dist(self, roles, st, h):
@@ -237,13 +248,13 @@ class Game:
         if not self.plan.get('co') or st['lab'][h] == '狩':
             lab = st['lab']
             if st['lab'][h] == '狩' and self.plan.get('co'):   # COずみの狩人は護衛先を出す
-                lab = tuple('白' if j == b else l for j, l in enumerate(lab))
+                lab = tuple('白' if j == b and l == '灰' else l for j, l in enumerate(lab))
                 hist = hist + (('guard', h, b),)
             st3 = dict(st, hist=hist, lab=lab)
-            return tagged(('翌日', st3['alive'], lab), self.day(roles, st3))
-        lab = tuple('狩' if j == h else ('白' if j == b else l) for j, l in enumerate(st['lab']))
+            return self.next_day(roles, st3)
+        lab = tuple('狩' if j == h else ('白' if j == b and l == '灰' else l) for j, l in enumerate(st['lab']))   # 灰の護衛先だけが白になる
         st3 = dict(st, hist=hist + (('hco', h, b),), lab=lab)
-        return tagged(('狩人CO',), tagged(('翌日', st3['alive'], lab), self.day(roles, st3)))
+        return tagged(('狩人CO',), self.next_day(roles, st3))
 
 # ---------------------------------------------------------------- 最善応答（人外：狼と狂人を交互に）
 def agents_infosets(root):

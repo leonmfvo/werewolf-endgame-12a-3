@@ -17,6 +17,7 @@ def pname(board, roles, i):
     if l == '霊': return '真霊'
     if l == '狩': return '真狩'
     if l == 'ギ': return {'H': 'ギの狩', 'C': 'ギの猫'}[r]
+    if l == '白': return {'V': '白の村', 'C': '白の猫'}[r]
     return {'V': '村', 'H': '灰の狩', 'C': '灰の猫'}[r]
 
 def names(board, roles):
@@ -40,7 +41,7 @@ def plan_text(board, vt, vs, only=None):
     for (l, r), d in zip(vt, vs):
         if only is not None and (l, r) not in only: continue
         who = {('猫', 'C'): '真猫', ('霊', 'M'): '真霊', ('狩', 'H'): '真狩', ('ギ', 'H'): 'ギの狩', ('ギ', 'C'): 'ギの猫',
-               ('灰', 'V'): '村', ('灰', 'H'): '灰の狩', ('灰', 'C'): '灰の猫'}[(l, r)]
+               ('灰', 'V'): '村', ('灰', 'H'): '灰の狩', ('灰', 'C'): '灰の猫', ('白', 'V'): '白の村', ('白', 'C'): '白の猫'}[(l, r)]
         items = [(x, p) for x, p in d.items() if p > 0]
         if len(items) == 1: out.append(f'{who}が{tname(l, items[0][0])}に投票')
         else:

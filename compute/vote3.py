@@ -12,17 +12,18 @@ from collections import defaultdict
 
 ROLES = {'M': 1, 'H': 1, 'C': 1, 'X': 1, 'W': 3, 'V': 4}
 RN = {'M': '霊能者', 'H': '狩人', 'C': '猫又', 'X': '狂人', 'W': '狼', 'V': '村人'}
-LABELS = ['霊', '猫', 'ギ', '狩', '灰']
-CAN = {'霊': 'MXW', '狩': 'HXW', 'ギ': 'HCXW', '灰': 'VHCXW'}
+LABELS = ['霊', '猫', 'ギ', '狩', '白', '灰']
+CAN = {'霊': 'MXW', '狩': 'HXW', 'ギ': 'HCXW', '白': 'VCX', '灰': 'VHCXW'}   # 白：狩人COで出た護衛先（人間確定）
 VILL = set('MHCV')
 GRID = sorted({F(k, 12) for k in range(13)})   # 混ぜる確率の刻み（1/12）
 
-def boards(n=3):
+def boards(n=3, white=True):
     out = []
     for c in itertools.combinations_with_replacement(LABELS, n):
         c = list(c)
         if 'ギ' in c and ('猫' in c or '狩' in c): continue   # ギドラは猫・狩のCOとは同時に出ない
         if c.count('ギ') == 1: continue                       # ギドラは2人以上で出すCO。1人だけは意味がない
+        if c.count('白') > (2 if white else 0): continue      # 白（狩人COで出た護衛先）は翌日の盤面にだけ出る
         out.append(c)
     return out
 

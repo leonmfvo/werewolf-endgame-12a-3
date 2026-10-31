@@ -83,11 +83,13 @@
 
   // 道すじ。翌日の状態に行く行（[説明, 確率, 村勝率, 状態の番号, 翌日の状態でのこの内訳]）は
   // 「〇〇の時 → 霊猫灰灰（1w1k）（村勝率 1/2）」と書き、盤面をその状態へのリンクにする
+  // 決着した行の行末「村勝ち」「狼勝ち」だけに色（文字はそのまま残す）
+  const endColor = (t) => t.replace(/→ 村勝ち$/, '→ <span class="vw">村勝ち</span>').replace(/→ 狼勝ち$/, '→ <span class="ww">狼勝ち</span>');
   const sitOf = (t) => t.split('で')[0].replace('生存', '');
   function pathsHtml(n, paths, v) {
     let h = '<ol class="terms">' + paths.map(([lab, p, w, sid, nt]) => {
       const calc = `<span class="tm">${tex(`${fx(p)}\\times${fx(w)} = ${fx(mul(p, w))}`)}</span>`;
-      if (sid === undefined) return `<li><span class="tw">${esc(lab)}</span>：${calc}</li>`;
+      if (sid === undefined) return `<li><span class="tw">${endColor(esc(lab))}</span>：${calc}</li>`;
       const i = lab.lastIndexOf(' → 翌日 ');
       const pre = lab.slice(0, i), bd = lab.slice(i + 6).replace(/,/g, '');
       return `<li><span class="tw">${esc(pre)}の時 → <a class="nxl" href="#s${n}-${sid}">${esc(bd)}</a>（${esc(sitOf(nt))}）（村勝率 ${tex(fx(w), w)}）</span>：${calc}</li>`;

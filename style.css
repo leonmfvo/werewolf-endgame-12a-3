@@ -96,3 +96,6 @@ ol.terms li{margin:0 0 2px}
 .tm .katex,.total .katex,table.cmp .katex,.headline .katex{font-size:1.25em}
 /* 翌日の状態へのリンク（道すじの中の盤面） */
 a.nxl{font-weight:700;background:var(--hl);padding:0 3px;border-radius:3px}
+/* 生存状況ごとの最善（盤面ページの見出し） */
+ul.sits{margin:2px 0 2px 1.2em;padding:0}
+ul.sits li{margin:0}

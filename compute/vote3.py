@@ -47,6 +47,8 @@ def assignments(board):
         if '狩' in board and any(l == '灰' and r == 'H' for l, r in zip(board, roles)): continue
         # ギドラがいるなら、生きている本物の狩人・猫又はギドラに加わっている（灰にはいない）
         if 'ギ' in board and any(l == '灰' and r in 'HC' for l, r in zip(board, roles)): continue
+        # 白は本物の狩人がGJの翌朝にCOして出した護衛先：本物の狩人は狩COで生きているか、死んでいる（灰などには潜んでいない）
+        if '白' in board and any(r == 'H' and l != '狩' for l, r in zip(board, roles)): continue
         yield weight(roles), roles
 
 def situation(board, roles):

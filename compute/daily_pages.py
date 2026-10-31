@@ -123,21 +123,6 @@ def adv_policy_1(labels, worlds, plan):
     g = Game(labels, plan, start=worlds); root, _ = g.root()
     return D.adversary_min(root, starts=1)
 
-def board_page(board):
-    key = D.board_key(board)
-    labels, worlds = D.from_key(key)
-    best = D.INFO[key]['plan']
-    plans = [('g', best)]
-    a = alt_plan(labels, worlds, best)
-    if a: plans.append(('a', a))
-    runs = []
-    for tag, plan in plans:
-        per = run_plan(labels, worlds, plan, with_paths=True)
-        runs.append((tag, plan, per, sum(p * v for (p, _, _), (v, _) in zip(worlds, per))))
-    assert runs[0][3] == D.DICT[key]
-    ws0 = [(p, r) for p, r, kn in worlds]
-    return assemble(labels, ws0, runs)
-
 def vote_text(R):
     """3人の状態の村の投票（見た目と自分の役ごとの、区分ごとの確率）"""
     out = []
@@ -148,8 +133,26 @@ def vote_text(R):
         out.append(me + 'は' + '・'.join(f'{l}に{WT.fs(q) if q != 1 else "全部"}' for l, q in d if q))
     return '昼：' + '、'.join(out)
 
+def hang_paths(labels, worlds, per_v, hangs):
+    """3人の状態：内訳ごとの（村勝率, 道すじ）。道すじは吊られる人ごと"""
+    per = []
+    for (p, r, kn), x, hang in zip(worlds, per_v, hangs):
+        pt = {}
+        for k, q in hang.items():
+            if q == 0: continue
+            lab = f'{who(labels, r, k)}を吊る'
+            if r[k] == 'W': lab += ' → 村勝ち'; w = F(1)
+            elif r[k] == 'C': w = F(sum(1 for j in range(len(r)) if j != k and r[j] == 'W'), len(r) - 1); lab += ' → 道連れ'
+            else: lab += ' → 狼勝ち'; w = F(0)
+            pt[lab] = [F(q), F(q) * w]
+        per.append((x, pt))
+    return per
+
+def solve3_full(labels, worlds):
+    return G3.solve_board(labels, cases=[(p, r) for p, r, kn in worlds], extras=[kn for p, r, kn in worlds])
+
 def state_entry(key):
-    """翌日の状態の説明：盤面のページと同じ形（生存状況・内訳ごとの割合と村勝率、道すじ）"""
+    """翌日の状態の説明：盤面のページと同じ形（内訳ごとの割合と村勝率、道すじ）"""
     labels, worlds = D.from_key(key)
     ws0 = [(p, r) for p, r, kn in worlds]
     v = D.value(key)
@@ -157,29 +160,55 @@ def state_entry(key):
         plan = D.INFO[key]['plan']
         per = run_plan(labels, worlds, plan, with_paths=True)
     else:
-        R = G3.solve_board(labels, cases=[(p, r) for p, r, kn in worlds], extras=[kn for p, r, kn in worlds])
-        plan = vote_text(R); per = []
-        for (p, r, kn), x, hang in zip(worlds, R['per'], R['hangs']):
-            pt = {}
-            for k, q in hang.items():
-                if q == 0: continue
-                lab = f'{who(labels, r, k)}を吊る'
-                if r[k] == 'W': lab += ' → 村勝ち'; w = F(1)
-                elif r[k] == 'C': w = F(sum(1 for j in range(len(r)) if j != k and r[j] == 'W'), len(r) - 1); lab += ' → 道連れ'
-                else: lab += ' → 狼勝ち'; w = F(0)
-                pt[lab] = [F(q), F(q) * w]
-            per.append((x, pt))
+        R = solve3_full(labels, worlds)
+        plan = vote_text(R); per = hang_paths(labels, worlds, R['per'], R['hangs'])
     e = assemble(labels, ws0, [('g', plan, per, v)])
-    fresh = all(len(l) == 1 for l in labels) and bool(GM.worlds(labels)) and D.board_key(labels) == key   # 新しい盤面（そのページ）と同じ割合か
+    fresh = False   # 生存状況ごとの盤面とは、内訳の割合や見分けられる人が違うことが多い（同じなら番号で分かる）
     assert sum(p * x for (p, _), (x, _) in zip(ws0, per)) == v
     return dict(n=len(labels), board=e['board'], v=e['v'], plan=e['plan'], secs=e['secs'], summ=e['summ'], fresh=fresh)
+
+def board_page(board):
+    """盤面のページ：生存状況（全員が知っている）ごとに、村の最善の進め方と比べる相手、内訳ごとの道すじ"""
+    allw = sum(F(w) for w, _ in GM.worlds(board))
+    secs = []; summ = []; v = F(0); va = F(0); has_alt = True
+    for sit, key in D.board_keys(board).items():
+        labels, worlds = D.from_key(key)
+        share = sum(F(w) for w, r in GM.worlds(board) if GM.situation(board, r) == sit) / allw
+        ws0 = [(p, r) for p, r, kn in worlds]
+        if len(labels) >= 4:
+            best = D.INFO[key]['plan']
+            plans = [('g', best)]
+            a = alt_plan(labels, worlds, best)
+            if a: plans.append(('a', a))
+            runs = []
+            for tag, plan in plans:
+                per = run_plan(labels, worlds, plan, with_paths=True)
+                runs.append((tag, plan, per, sum(p * x for (p, _, _), (x, _) in zip(worlds, per))))
+        else:
+            R = solve3_full(labels, worlds)
+            runs = [('g', vote_text(R), hang_paths(labels, worlds, R['per'], R['hangs']), R['v'])]
+            if R['alt']:
+                ps2, ads2 = R['alt']['ps'], R['alt']['ads']
+                v2, p2, h2 = R['evalp'](ps2, ads2)
+                runs.append(('a', vote_text(dict(R, ps=ps2)), hang_paths(labels, worlds, p2, h2), v2))
+        assert runs[0][3] == D.value(key), (board, sit)
+        e = assemble(labels, ws0, runs)
+        for s in e['secs']:
+            s['share'] = WT.fs(F(s['share']) * share)
+            if len(e['secs']) == 1: s['title'] = sit
+        secs += e['secs']
+        x = e['summ'][0]; summ.append(dict(sit=sit, share=WT.fs(share), v=x['v'], va=x['va'], plan=e['plan'], plana=e['plana']))
+        v += share * runs[0][3]
+        if len(runs) > 1: va += share * runs[1][3]
+        else: has_alt = False
+    return dict(board=list(board), v=WT.fs(v), plan=None, va=WT.fs(va) if has_alt else None, plana=None, secs=secs, summ=summ)
 
 if __name__ == '__main__':
     n = int(sys.argv[1]); dst = sys.argv[2]
     sdst = os.path.join(os.path.dirname(dst), f's{n}.json')   # 翌日の状態の説明（ページで開く）
     RD.load()
     out = []
-    for b in boards(n, white=(n <= 4)):
+    for b in RD.board_list(n):
         if not GM.worlds(b): continue
         out.append(board_page(b))
         print(','.join(b), out[-1]['v'], out[-1]['va'], len(SQ), flush=True)

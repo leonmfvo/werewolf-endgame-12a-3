@@ -70,7 +70,9 @@ def solve_board(board, cases=None, extras=None):
         a_ads = min(aopts, key=lambda a: val(alt[1], a, True))
         altd = dict(ps=alt[1], ads=a_ads, v=val(alt[1], a_ads, True))
     per = []; hangs = []; v = val(ps, ads, True, per, hangs)   # per：内訳ごとの村勝率、hangs：内訳ごとの吊られる人の確率
-    return dict(cases=cases, vt=vt, at=at, tg=tg, ps=ps, ads=ads, v=v, per=per, hangs=hangs, alt=altd)
+    def evalp(ps2, ads2):   # 別の決め方での（村勝率, 内訳ごと, 吊られる人）
+        p2 = []; h2 = []; v2 = val(ps2, ads2, True, p2, h2); return v2, p2, h2
+    return dict(cases=cases, vt=vt, at=at, tg=tg, ps=ps, ads=ads, v=v, per=per, hangs=hangs, alt=altd, evalp=evalp)
 
 def outcome(board, roles, votes, exact):
     n = len(board)

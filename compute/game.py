@@ -34,6 +34,8 @@ def worlds(board):
         if board.count('狩') == 1 and roles[board.index('狩')] != 'H': continue
         if '狩' in board and any(l == '灰' and r == 'H' for l, r in zip(board, roles)): continue
         if 'ギ' in board and any(l == '灰' and r in 'HC' for l, r in zip(board, roles)): continue
+        # 白は本物の狩人がGJの翌朝にCOして出した護衛先：本物の狩人は狩COで生きているか、死んでいる（灰などには潜んでいない）
+        if '白' in board and any(r == 'H' and l != '狩' for l, r in zip(board, roles)): continue
         if 'X' in roles and n >= 5 and 2 * (w + 1) > n: continue   # PP 確定
         out.append((weight(roles), roles))
     return out

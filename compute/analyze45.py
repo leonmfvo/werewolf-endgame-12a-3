@@ -15,6 +15,7 @@ def who(board, roles, i):
     return WT.pname(board, roles, i)
 
 def plan_text(plan):
+    if isinstance(plan, str): return plan   # 3人の状態など、説明済みの文
     d = plan['des']; out = []
     if plan.get('mode') == 'spread':
         out.append(f'昼：各自が{d[0]}の中からランダムに投票')
@@ -109,7 +110,8 @@ def assemble(board, ws0, runs):
                     p = F(ws0[k][0]); dg += p
                     for lab, (q, qv) in per[k][1].items():
                         agg[lab][0] += p * q; agg[lab][1] += p * qv
-                lines = sorted(([lab, fs(q / dg), fs(qv / q) if q else '0'] for lab, (q, qv) in agg.items()), key=lambda x: -F(x[1]))
+                # 道すじの鍵が (説明, 翌日の状態の番号, 翌日の状態での内訳) のときは、それも付ける
+                lines = sorted(([lab[0] if isinstance(lab, tuple) else lab, fs(q / dg), fs(qv / q) if q else '0', *(lab[1:] if isinstance(lab, tuple) else ())] for lab, (q, qv) in agg.items()), key=lambda x: -F(x[1]))
                 total = sum(F(x[1]) * F(x[2]) for x in lines)
                 items.append(dict(tag=tag, best=(tag == 'g'), plan=plan_text(plan), paths=lines, v=fs(total)))
             secs.append(dict(title=st if single else t, share=fs(sum(F(ws0[k][0]) for k in lst) / tot), items=items))

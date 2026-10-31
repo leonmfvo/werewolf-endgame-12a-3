@@ -10,8 +10,16 @@ import daily as D, rundaily as RD
 import vote3g as G3
 from run45 import boards
 from analyze45 import assemble, who
+import wikitext as WT
+from vote3 import RN
 
 WV = {}   # 状態のキー → {(役, 狼が知っている人): 村勝率}
+SID = {}  # ページに載せる翌日の状態のキー → 番号（data/s<n>.json の何番目か）
+SQ = []   # 説明をまだ作っていない翌日の状態
+
+def sid_of(key):
+    if key not in SID: SID[key] = len(SQ); SQ.append(key)
+    return SID[key]
 
 def adv_policy(labels, worlds, plan):
     GM.MODE.update(exact=False, tags=False)
@@ -39,10 +47,11 @@ def next_value(ns, info):
     inv = {idx[al[old]]: new for new, old in enumerate(pos)}
     r = tuple(roles[al[i]] for i in pos)
     kn = tuple(sorted(inv[idx[k]] for k in know))
-    return key, world_values(key)[(r, kn)]
+    return key, world_values(key)[(r, kn)], r
 
-def walk(board, roles, node, pol, ns):
-    """決着か翌日までの道すじ：{説明: [確率, 確率×その先の村勝率]}"""
+def walk(board, roles, node, pol, ns, reg=False):
+    """決着か翌日までの道すじ：{説明: [確率, 確率×その先の村勝率]}。
+    reg：翌日の状態に番号を付けて、鍵を (説明, 番号, 翌日の状態でのこの内訳の見出し) にする（ページで翌日の状態を開けるように）"""
     out = defaultdict(lambda: [F(0), F(0)])
     def go(nd, p, labs):
         if p == 0: return
@@ -55,8 +64,9 @@ def walk(board, roles, node, pol, ns):
             elif t[0] == '猫噛み': labs = labs + ['猫噛みで狼が死ぬ']
             elif t[0] == '狩人CO': labs = labs + ['狩人CO']
         if nd.kind == 'N':
-            key, v = next_value(ns, nd.info)
+            key, v, r = next_value(ns, nd.info)
             k = ' → '.join(labs + ['翌日 ' + ','.join(key[0])])
+            if reg: k = (k, sid_of(key), WT.case_title(list(key[0]), r, GM.situation(key[0], r), False))
             out[k][0] += p; out[k][1] += p * v; return
         if nd.kind == 'L':
             k = ' → '.join(labs) + (' → 村勝ち' if nd.v == 1 else ' → 狼勝ち' if nd.v == 0 else '')
@@ -78,7 +88,7 @@ def run_plan(labels, worlds, plan, pol=None, with_paths=False):
     per = []
     for p, roles, know in worlds:
         nd = g.day(roles, dict(st0, bites=tuple(know)))
-        pt = walk(labels, roles, nd, pol, ns)
+        pt = walk(labels, roles, nd, pol, ns, reg=with_paths)
         per.append((sum(x[1] for x in pt.values()), pt))
     return per
 
@@ -127,13 +137,55 @@ def board_page(board):
     ws0 = [(p, r) for p, r, kn in worlds]
     return assemble(labels, ws0, runs)
 
+def vote_text(R):
+    """3人の状態の村の投票（見た目と自分の役ごとの、区分ごとの確率）"""
+    out = []
+    for t, p in zip(R['vt'], R['ps']):
+        labs = R['tg'][t]
+        me = f'{t[0]}（{RN[t[1]]}）' if t[0] in ('灰', 'ギ', '白') else f'{t[0]}（本物）'
+        d = [(labs[0], p), (labs[1], 1 - p)] if len(labs) == 2 else [(labs[0], F(1))]
+        out.append(me + 'は' + '・'.join(f'{l}に{WT.fs(q) if q != 1 else "全部"}' for l, q in d if q))
+    return '昼：' + '、'.join(out)
+
+def state_entry(key):
+    """翌日の状態の説明：盤面のページと同じ形（生存状況・内訳ごとの割合と村勝率、道すじ）"""
+    labels, worlds = D.from_key(key)
+    ws0 = [(p, r) for p, r, kn in worlds]
+    v = D.value(key)
+    if len(labels) >= 4:
+        plan = D.INFO[key]['plan']
+        per = run_plan(labels, worlds, plan, with_paths=True)
+    else:
+        R = G3.solve_board(labels, cases=[(p, r) for p, r, kn in worlds], extras=[kn for p, r, kn in worlds])
+        plan = vote_text(R); per = []
+        for (p, r, kn), x, hang in zip(worlds, R['per'], R['hangs']):
+            pt = {}
+            for k, q in hang.items():
+                if q == 0: continue
+                lab = f'{who(labels, r, k)}を吊る'
+                if r[k] == 'W': lab += ' → 村勝ち'; w = F(1)
+                elif r[k] == 'C': w = F(sum(1 for j in range(len(r)) if j != k and r[j] == 'W'), len(r) - 1); lab += ' → 道連れ'
+                else: lab += ' → 狼勝ち'; w = F(0)
+                pt[lab] = [F(q), F(q) * w]
+            per.append((x, pt))
+    e = assemble(labels, ws0, [('g', plan, per, v)])
+    fresh = bool(GM.worlds(labels)) and D.board_key(labels) == key   # 新しい盤面（そのページ）と同じ割合か
+    assert sum(p * x for (p, _), (x, _) in zip(ws0, per)) == v
+    return dict(n=len(labels), board=e['board'], v=e['v'], plan=e['plan'], secs=e['secs'], summ=e['summ'], fresh=fresh)
+
 if __name__ == '__main__':
     n = int(sys.argv[1]); dst = sys.argv[2]
+    sdst = os.path.join(os.path.dirname(dst), f's{n}.json')   # 翌日の状態の説明（ページで開く）
     RD.load()
-    out = json.load(open(dst)) if os.path.exists(dst) else []   # 途中から再開できる
-    done = {','.join(x['board']) for x in out}
+    out = []
     for b in boards(n, white=(n <= 4)):
-        if not GM.worlds(b) or ','.join(b) in done: continue
+        if not GM.worlds(b): continue
         out.append(board_page(b))
-        print(','.join(b), out[-1]['v'], out[-1]['va'], flush=True)
+        print(','.join(b), out[-1]['v'], out[-1]['va'], len(SQ), flush=True)
         json.dump(out, open(dst, 'w'), ensure_ascii=False, separators=(',', ':'))
+    st = []
+    while len(st) < len(SQ):   # 翌日の状態の説明（その中の翌日の状態も足していく）
+        st.append(state_entry(SQ[len(st)]))
+        if len(st) % 200 == 0: print('states', len(st), '/', len(SQ), flush=True)
+    json.dump(st, open(sdst, 'w'), ensure_ascii=False, separators=(',', ':'))
+    print('states done', len(st), flush=True)

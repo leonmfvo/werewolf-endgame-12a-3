@@ -20,7 +20,7 @@ def solve_board(board, cases=None, extras=None):
     tot = sum(w for w, _ in cases)
     # 浮動小数で速く：各内訳について、各人の投票先（個人）の確率
     idx_of = {t: i for i, t in enumerate(vt)}
-    def val(ps, ads, exact=False):
+    def val(ps, ads, exact=False, per=None):
         num = (lambda x: F(x)) if exact else float
         s = num(0)
         for k, (w, roles) in enumerate(cases):
@@ -32,6 +32,7 @@ def solve_board(board, cases=None, extras=None):
                 else: d = {ads[at.index(xt(k, i, roles[i]))]: num(1)}
                 votes.append(V3.vote_dist(board, i, d) if exact else {j: float(p) for j, p in V3.vote_dist(board, i, {k: F(v) if not isinstance(v, float) else F(v).limit_denominator(1000) for k, v in d.items()}).items()})
             hang, v = outcome(board, roles, votes, exact)
+            if per is not None: per.append(v)
             s += num(w) / num(tot) * v
         return s
     aopts = list(itertools.product(*[tg[t] for t in at]))
@@ -67,7 +68,8 @@ def solve_board(board, cases=None, extras=None):
     if alt:
         a_ads = min(aopts, key=lambda a: val(alt[1], a, True))
         altd = dict(ps=alt[1], ads=a_ads, v=val(alt[1], a_ads, True))
-    return dict(cases=cases, vt=vt, at=at, tg=tg, ps=ps, ads=ads, v=val(ps, ads, True), alt=altd)
+    per = []; v = val(ps, ads, True, per)   # per：内訳ごとの村勝率
+    return dict(cases=cases, vt=vt, at=at, tg=tg, ps=ps, ads=ads, v=v, per=per, alt=altd)
 
 def outcome(board, roles, votes, exact):
     n = len(board)

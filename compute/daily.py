@@ -13,8 +13,9 @@ ORDER = ['霊', '猫', 'ギ', '狩', '白', '灰']
 DICT = {}   # 状態のキー → 村勝率（分数）
 INFO = {}   # 状態のキー → 説明用（最善の進め方など）
 
-def canon(labels, worlds):
-    """状態の正規形：同じ見た目の人の並べ替えで、いちばん小さい形にそろえる。worlds = [(確率, 役, 知っている人)]"""
+def canon(labels, worlds, with_pos=False):
+    """状態の正規形：同じ見た目の人の並べ替えで、いちばん小さい形にそろえる。worlds = [(確率, 役, 知っている人)]
+    with_pos：（正規形, 新しい並び）を返す（新しい i 番目＝元の pos[i] 番目の人）"""
     n = len(labels)
     order = sorted(range(n), key=lambda i: ORDER.index(labels[i]))
     groups = []
@@ -29,9 +30,9 @@ def canon(labels, worlds):
         inv = {old: new for new, old in enumerate(pos)}
         ws = tuple(sorted((tuple(r[i] for i in pos), tuple(sorted(inv[k] for k in know)), str(F(p) / tot)) for p, r, know in worlds))
         key = (tuple(labels[i] for i in pos), ws)
-        if best is None or key < best: best = key
+        if best is None or key < best[0]: best = (key, pos)
         if len(perms) and sum(len(x) for x in perms) > 5040: break
-    return best
+    return best if with_pos else best[0]
 
 def from_key(key):
     labels, ws = key
@@ -197,9 +198,16 @@ def solve_day(key, labels, worlds):
         vf, pol = adversary_min(root, starts=1)
         scr.append((vf, plan))
     scr.sort(key=lambda x: -x[0])
-    # 2段目：上位5つを、やり直し6回で詰め直し、値は分数の木で厳密に
+    # 2段目：上位の候補を、やり直し9回で詰め直し、値は分数の木で厳密に。
+    # 護衛先などだけが違って1段目の値が同じ候補は同じ系統として1つにまとめる（同じ値の候補で枠が埋まり、別の系統を取りこぼさないように）
+    top, seen = [], set()
+    for vf0, plan in scr:
+        fam = (plan['des'], plan['counter'], plan['mode'], round(vf0, 9))
+        if fam in seen: continue
+        seen.add(fam); top.append(plan)
+        if len(top) == 8: break
     best = None
-    for vf0, plan in scr[:5]:
+    for plan in top:
         GM.MODE.update(exact=False, tags=False)
         g = Game(labels, plan, start=start); root, _ = g.root()
         vf, pol = adversary_min(root)

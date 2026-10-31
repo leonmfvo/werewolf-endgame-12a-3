@@ -83,6 +83,11 @@ def board_text(board, ranked):
             per.append((evaluate(nd, pol, default=0), paths(board, roles, nd, pol)))
             del nd
         runs.append((tag, plan, per, sum(F(w, tot) * x[0] for (w, _), x in zip(ws0, per))))
+    return assemble(board, ws0, runs)
+
+def assemble(board, ws0, runs):
+    """runs：[(印, 進め方, 内訳ごとの(村勝率, 道すじ), 全体の村勝率)] からページ用の説明を作る"""
+    tot = sum(F(w) for w, _ in ws0)
     sits = OrderedDict()
     for k, (w, roles) in enumerate(ws0):
         sits.setdefault(situation(board, roles), []).append(k)
@@ -108,7 +113,7 @@ def board_text(board, ranked):
                 total = sum(F(x[1]) * F(x[2]) for x in lines)
                 items.append(dict(tag=tag, best=(tag == 'g'), plan=plan_text(plan), paths=lines, v=fs(total)))
             secs.append(dict(title=st if single else t, share=fs(sum(F(ws0[k][0]) for k in lst) / tot), items=items))
-    return dict(board=board, v=fs(runs[0][3]), plan=plan_text(best_plan),
+    return dict(board=board, v=fs(runs[0][3]), plan=plan_text(runs[0][1]),
                 va=fs(runs[1][3]) if len(runs) > 1 else None, plana=plan_text(runs[1][1]) if len(runs) > 1 else None,
                 secs=secs, summ=summ)
 

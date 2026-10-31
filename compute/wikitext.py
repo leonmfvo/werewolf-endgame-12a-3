@@ -11,6 +11,8 @@ def fs(x):
 def pname(board, roles, i):
     """人の呼び名（真猫・狂・狼・村 など）"""
     l, r = board[i], roles[i]
+    if len(l) > 1:   # 狩A・狩B など、公開の出来事で区別できる人：見た目＋役
+        return f"{l}（{ {'W': '狼', 'X': '狂'}.get(r) or ('本物' if l[0] in '霊猫狩' else {'V': '村', 'H': '狩', 'C': '猫'}[r])}）"
     if r == 'W': return '狼'
     if r == 'X': return '狂'
     if l == '猫': return '真猫'
@@ -53,12 +55,13 @@ def plan_text(board, vt, vs, only=None):
 def case_title(board, roles, sit, single):
     if single: return sit
     parts = []
-    for l in ('霊', '猫', 'ギ', '狩', '灰'):
+    # 狩A・狩B など区別できる人がいれば、その見た目ごとに書く
+    for l in sorted({b for b in board if b[0] in '霊猫ギ狩'}, key=lambda b: ('霊猫ギ狩'.index(b[0]), b)):
         rs = [r for b, r in zip(board, roles) if b == l]
-        if 'X' in rs and l != '灰': parts.append(f'{l}に狂')
-        if 'W' in rs and l != '灰': parts.append(f'{l}に狼')
+        if 'X' in rs: parts.append(f'{l}に狂')
+        if 'W' in rs: parts.append(f'{l}に狼')
     if not parts:
-        rs = [r for b, r in zip(board, roles) if b == '灰']
+        rs = [r for b, r in zip(board, roles) if b[0] == '灰']
         x = ('狼' if 'W' in rs else '') + ('と狂' if 'W' in rs and 'X' in rs else ('狂' if 'X' in rs else ''))
         if x: parts.append('灰に' + x)
     return sit + 'で' + '・'.join(parts) if parts else sit

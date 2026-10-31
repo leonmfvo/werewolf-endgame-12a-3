@@ -15,12 +15,15 @@ INFO = {}   # 状態のキー → 説明用（最善の進め方など）
 
 def canon(labels, worlds, with_pos=False):
     """状態の正規形：同じ見た目の人の並べ替えで、いちばん小さい形にそろえる。worlds = [(確率, 役, 知っている人)]
-    with_pos：（正規形, 新しい並び）を返す（新しい i 番目＝元の pos[i] 番目の人）"""
+    with_pos：（正規形, 新しい並び）を返す（新しい i 番目＝元の pos[i] 番目の人）
+    見た目は1文字目（狩A→狩）にもどしてから並べ替え、そのあと、入れ替えても内訳の割合が変わらない人どうしだけを同じ見た目に、
+    前の日までの公開の出来事で区別できる人は 狩A・狩B のように別の見た目にする（村も人外も名指しで選べる）"""
     n = len(labels)
-    order = sorted(range(n), key=lambda i: ORDER.index(labels[i]))
+    base = [l[0] for l in labels]
+    order = sorted(range(n), key=lambda i: ORDER.index(base[i]))
     groups = []
     for i in order:
-        if groups and labels[groups[-1][0]] == labels[i]: groups[-1].append(i)
+        if groups and base[groups[-1][0]] == base[i]: groups[-1].append(i)
         else: groups.append([i])
     perms = [list(itertools.permutations(g)) for g in groups]
     merged = defaultdict(F)   # 同じ（役, 狼が知っている人）の内訳はまとめる（1/13 と 2/13 のように分かれたままだと、同じ状態が別のキーになる）
@@ -32,10 +35,46 @@ def canon(labels, worlds, with_pos=False):
         pos = [i for g in combo for i in g]          # 新しい並び
         inv = {old: new for new, old in enumerate(pos)}
         ws = tuple(sorted((tuple(r[i] for i in pos), tuple(sorted(inv[k] for k in know)), str(F(p) / tot)) for p, r, know in worlds))
-        key = (tuple(labels[i] for i in pos), ws)
+        key = (tuple(base[i] for i in pos), ws)
         if best is None or key < best[0]: best = (key, pos)
         if len(perms) and sum(len(x) for x in perms) > 5040: break
-    return best if with_pos else best[0]
+    (labs, ws), pos = best
+    labs = split_labels(list(labs), ws)
+    key = (tuple(labs), ws)
+    return (key, pos) if with_pos else key
+
+def split_labels(labs, ws):
+    """正規形の内訳 ws を変えない同じ見た目の人の入れ替えだけで行き来できる人を同じ見た目に、そうでない人を A・B… に分ける"""
+    n = len(labs)
+    idx = defaultdict(list)
+    for i, l in enumerate(labs): idx[l].append(i)
+    cls = [v for v in idx.values() if len(v) >= 2]
+    if not cls: return labs
+    S = set(ws)
+    parent = list(range(n))
+    def find(x):
+        while parent[x] != x: parent[x] = parent[parent[x]]; x = parent[x]
+        return x
+    for combo in itertools.product(*[itertools.permutations(c) for c in cls]):
+        sig = list(range(n))
+        for c, pc in zip(cls, combo):
+            for a, b in zip(c, pc): sig[a] = b
+        # 人 i を sig[i] の席に移したときに内訳が同じか
+        moved = set()
+        for r, kn, p in ws:
+            r2 = [None] * n
+            for i in range(n): r2[sig[i]] = r[i]
+            moved.add((tuple(r2), tuple(sorted(sig[k] for k in kn)), p))
+        if moved == S:
+            for i in range(n): parent[find(i)] = find(sig[i])
+    out = list(labs)
+    for c in cls:
+        orbits = []
+        for i in c:
+            if find(i) not in orbits: orbits.append(find(i))
+        if len(orbits) > 1:
+            for i in c: out[i] = labs[i] + 'ABCDE'[orbits.index(find(i))]
+    return out
 
 def from_key(key):
     labels, ws = key
@@ -71,6 +110,7 @@ def outcomes(root, pol, exact):
         else: stack.append((nd.ch[pol.get((nd.agent, nd.info), 0)], p))
     return term, nxt
 
+KICKS = 20   # 行き詰まったあとに手をばらばらに変えて試し直す回数
 FCACHE = {}   # 探索中（小数）の翌日の状態 → 村勝率（小数）。同じ状態を何度も正規形にしないため
 
 def total(root, pol, exact=False):
@@ -166,16 +206,13 @@ class Flat:
             p, req, tv, ok, wd = self.leaves[li]
             if all(self.pol[j] == b for j, b in req): self.add(li, 1)
 
-def adversary_min(root, starts=9):
+def adversary_min(root, starts=9, kicks=KICKS):
+    """人外の最善（村勝率が一番低くなる手）を、1人ずつ手を良くする探索で求める。
+    やり直し starts 回。それぞれ、行き詰まったら手をいくつかばらばらに変えてまた良くする（kicks 回）。良くならなければ元に戻す"""
     fl = Flat(root)
     n = len(fl.opts)
     best = None
-    for s in range(starts):
-        rnd = random.Random(s)
-        pol = [0 if s == 0 else rnd.randrange(fl.opts[i]) for i in range(n)]
-        cur = fl.setup(pol)
-        # 見る順番：前から・後ろから・ばらばら（順番しだいで行き着く手が変わるので、いくつか試して一番低いものを取る）
-        order = list(range(n)) if s % 3 == 0 else (list(range(n))[::-1] if s % 3 == 1 else rnd.sample(range(n), n))
+    def descend(order, cur):
         improved = True
         while improved:
             improved = False
@@ -187,6 +224,24 @@ def adversary_min(root, starts=9):
                     v = fl.value()
                     if v < cur - 1e-12: cur = v; improved = True
                     else: fl.change(i, old)
+        return cur
+    for s in range(starts):
+        rnd = random.Random(s)
+        pol = [0 if s == 0 else rnd.randrange(fl.opts[i]) for i in range(n)]
+        cur = fl.setup(pol)
+        # 見る順番：前から・後ろから・ばらばら（順番しだいで行き着く手が変わるので、いくつか試して一番低いものを取る）
+        order = list(range(n)) if s % 3 == 0 else (list(range(n))[::-1] if s % 3 == 1 else rnd.sample(range(n), n))
+        cur = descend(order, cur)
+        many = [i for i in range(n) if fl.opts[i] > 1]
+        for _ in range(kicks if many else 0):
+            keep = list(fl.pol)
+            for i in rnd.sample(many, min(len(many), rnd.randint(1, 3))):
+                fl.change(i, rnd.randrange(fl.opts[i]))
+            v = descend(rnd.sample(range(n), n), fl.value())
+            if v < cur - 1e-12: cur = v
+            else:
+                for i in range(n):
+                    if fl.pol[i] != keep[i]: fl.change(i, keep[i])
         if best is None or cur < best[0] - 1e-12:
             best = (cur, {k: fl.pol[i] for k, i in fl.keys.items()})
     return best

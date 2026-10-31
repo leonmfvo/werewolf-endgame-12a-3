@@ -43,8 +43,8 @@ def situation(board, roles, alive=None):
     w = sum(1 for i in alive if roles[i] == 'W'); x = any(roles[i] == 'X' for i in alive)
     st = f'{w}w' + ('1k' if x else '') + '生存'
     hid = []
-    if any(board[i] == '灰' and roles[i] == 'H' for i in alive): hid.append('狩生存')
-    if any(board[i] == '灰' and roles[i] == 'C' for i in alive): hid.append('猫生存')
+    if any(board[i][0] == '灰' and roles[i] == 'H' for i in alive): hid.append('狩生存')
+    if any(board[i][0] == '灰' and roles[i] == 'C' for i in alive): hid.append('猫生存')
     return st + ('（' + '・'.join(hid) + '）' if hid else '')
 
 # ---------------------------------------------------------------- 木
@@ -134,14 +134,14 @@ class Game:
         cl = self.classes(st)
         for l in self.plan['des']:
             if cl.get(l): return [(F(1, len(cl[l])), d) for d in cl[l]]
-        rest = [i for i in st['alive'] if st['lab'][i] not in ('白',)]
+        rest = [i for i in st['alive'] if st['lab'][i][0] != '白']
         return [(F(1, len(rest)), d) for d in rest]
 
     def village_vote(self, roles, st, i, d):
         """村の人 i の投票先の分布（指定 d のとき）"""
         lab = st['lab']; cl = self.classes(st)
-        mine = [j for j in cl.get(lab[i], []) if j != i]
-        if self.plan.get('counter') and lab[i] in ('霊', '猫', '狩', 'ギ') and mine:
+        mine = [j for j in st['alive'] if j != i and lab[j][0] == lab[i][0]]   # 対抗：同じ見た目（狩A・狩B も同じ狩）
+        if self.plan.get('counter') and lab[i][0] in ('霊', '猫', '狩', 'ギ') and mine:
             return {j: F(1, len(mine)) for j in mine}
         if d is not None and i != d: return {d: F(1)}
         for l in self.plan['des']:
@@ -186,7 +186,7 @@ class Game:
         for j in st['alive']:
             if j == i or (excl_wolves and j in excl_wolves): continue
             g[(st['lab'][j], j == d)].append(j)
-        return [tuple(v) for k, v in sorted(g.items(), key=lambda kv: (LABELS.index(kv[0][0]) if kv[0][0] in LABELS else 9, not kv[0][1]))]
+        return [tuple(v) for k, v in sorted(g.items(), key=lambda kv: (LABELS.index(kv[0][0][0]) if kv[0][0][0] in LABELS else 9, kv[0][0], not kv[0][1]))]
 
     def resolve(self, roles, st, vill, advv):
         """票の分布 → 吊り"""
@@ -233,8 +233,22 @@ class Game:
         return self.night(roles, st) if nxt == 'N' else self.next_day(roles, st)
 
     # ---- 夜
-    def guard_dist(self, roles, st, h):
+    def chain_label(self, st):
+        """名指しの護衛指示（plan['chain']）：狩CO（なければギ）が2人以上生きていれば、その区分"""
+        if not self.plan.get('chain'): return None
+        for l in ('狩', 'ギ'):
+            if sum(1 for i in st['alive'] if st['lab'][i][0] == l) >= 2: return l
+        return None
+
+    def guard_dist(self, roles, st, h, chain=None):
+        """狩人 h の護衛先の分布。chain（名指しの順 A, B, …）があり h がその中にいれば、A→B、B→C…、最後の人は護衛の順の最初の区分（自分の区分以外）"""
         cl = self.classes(st)
+        if chain and h in chain:
+            k = chain.index(h)
+            if k + 1 < len(chain): return [(F(1), chain[k + 1])]
+            for l in self.plan['guard']:
+                c = [j for j in cl.get(l, []) if j != h and j not in chain]
+                if c: return [(F(1, len(c)), j) for j in c]
         for l in self.plan['guard']:
             c = [j for j in cl.get(l, []) if j != h]
             if c: return [(F(1, len(c)), j) for j in c]
@@ -242,20 +256,39 @@ class Game:
         return [(F(1, len(c)), j) for j in c]
 
     def night(self, roles, st):
+        cl = self.chain_label(st)
+        if cl is None: return self.night_c(roles, st, None)
+        # 名指しの順は公開のくじで決める（同じ見た目の人どうしなので、どの並びも同じ確率）
+        mem = [i for i in st['alive'] if st['lab'][i][0] == cl]
+        perms = list(itertools.permutations(mem))
+        return chance([(F(1, len(perms)), self.night_c(roles, st, p)) for p in perms])
+
+    def night_c(self, roles, st, chain):
+        if chain is not None: st = dict(st, hist=st['hist'] + (('chain', chain),))   # 名指しの順は公開（翌朝、村は夜の結果と合わせて推理できる）
         alive = st['alive']
         wolves = tuple(i for i in alive if roles[i] == 'W')
-        tgroups = self.groups(st, None, None, excl_wolves=set(wolves))
-        node = Node('A', agent='W', info=('N', st['hist'], st['lab'], wolves, st['bites']), opts=tgroups, ch=[])
+        if chain is None:
+            tgroups = self.groups(st, None, None, excl_wolves=set(wolves))
+            info = ('N', st['hist'], st['lab'], wolves, st['bites'])
+        else:
+            # 噛み先は「見た目＋名指しの何番目か」で選ぶ（同じまとまりの中からはランダム）。狼は自分が何番目かを知っている
+            g = defaultdict(list)
+            for j in alive:
+                if j in wolves: continue
+                g[(st['lab'][j], chain.index(j) if j in chain else -1)].append(j)
+            tgroups = [tuple(v) for k, v in sorted(g.items(), key=lambda kv: (LABELS.index(kv[0][0][0]) if kv[0][0][0] in LABELS else 9, kv[0][0], kv[0][1]))]
+            info = ('N', st['hist'], st['lab'], tuple(chain.index(w) if w in chain else -1 for w in wolves), st['bites'], 'chain')
+        node = Node('A', agent='W', info=info, opts=tgroups, ch=[])
         h = next((i for i in alive if roles[i] == 'H'), None)
         for grp in tgroups:
-            node.ch.append(chance([(F(1, len(grp)), tagged(('噛み', b), self.bite(roles, st, wolves, h, b))) for b in grp]))
+            node.ch.append(chance([(F(1, len(grp)), tagged(('噛み', b), self.bite(roles, st, wolves, h, b, chain))) for b in grp]))
         return node
 
-    def bite(self, roles, st, wolves, h, b):
+    def bite(self, roles, st, wolves, h, b, chain=None):
         alive = st['alive']
         if True:
             st2 = dict(st, bites=st['bites'] + (b,))
-            gd = self.guard_dist(roles, st, h) if h is not None and h != b else []
+            gd = self.guard_dist(roles, st, h, chain) if h is not None and h != b else []
             pgj = sum((p for p, j in gd if j == b), F(0))
             out = []
             if pgj > 0: out.append((pgj, tagged(('GJ',), self.gj_morning(roles, st2, h, b))))
@@ -274,14 +307,14 @@ class Game:
 
     def gj_morning(self, roles, st, h, b):
         hist = st['hist'] + (('gj',),)
-        if not self.plan.get('co') or st['lab'][h] == '狩':
+        if not self.plan.get('co') or st['lab'][h][0] == '狩':
             lab = st['lab']
-            if st['lab'][h] == '狩' and self.plan.get('co'):   # COずみの狩人は護衛先を出す
-                lab = tuple('白' if j == b and l == '灰' else l for j, l in enumerate(lab))
+            if st['lab'][h][0] == '狩' and self.plan.get('co'):   # COずみの狩人は護衛先を出す
+                lab = tuple('白' if j == b and l[0] == '灰' else l for j, l in enumerate(lab))
                 hist = hist + (('guard', h, b),)
             st3 = dict(st, hist=hist, lab=lab)
             return self.next_day(roles, st3)
-        lab = tuple('狩' if j == h else ('白' if j == b and l == '灰' else l) for j, l in enumerate(st['lab']))   # 灰の護衛先だけが白になる
+        lab = tuple('狩' if j == h else ('白' if j == b and l[0] == '灰' else l) for j, l in enumerate(st['lab']))   # 灰の護衛先だけが白になる
         st3 = dict(st, hist=hist + (('hco', h, b),), lab=lab)
         return tagged(('狩人CO',), self.next_day(roles, st3))
 

@@ -14,8 +14,8 @@ def solve_board(board, cases=None, extras=None):
     if not cases: return None
     extras = extras or [None] * len(cases)
     xt = lambda k, i, r: (board[i], r, extras[k] if r == 'W' else None)
-    vt = sorted({(board[i], r[i]) for _, r in cases for i in range(len(board)) if r[i] in V3.VILL}, key=lambda t: (V3.LABELS.index(t[0]), t[1]))
-    at = sorted({xt(k, i, r[i]) for k, (_, r) in enumerate(cases) for i in range(len(board)) if r[i] in 'WX'}, key=lambda t: (V3.LABELS.index(t[0]), t[1], repr(t[2])))
+    vt = sorted({(board[i], r[i]) for _, r in cases for i in range(len(board)) if r[i] in V3.VILL}, key=lambda t: (V3.LABELS.index(t[0][0]), t[0], t[1]))
+    at = sorted({xt(k, i, r[i]) for k, (_, r) in enumerate(cases) for i in range(len(board)) if r[i] in 'WX'}, key=lambda t: (V3.LABELS.index(t[0][0]), t[0], t[1], repr(t[2])))
     tg = {t: V3.targets(board, board.index(t[0])) for t in vt + at}
     tot = sum(w for w, _ in cases)
     # 浮動小数で速く：各内訳について、各人の投票先（個人）の確率

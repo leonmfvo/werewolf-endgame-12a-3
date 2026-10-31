@@ -143,7 +143,7 @@ def vote_text(R):
     out = []
     for t, p in zip(R['vt'], R['ps']):
         labs = R['tg'][t]
-        me = f'{t[0]}（{RN[t[1]]}）' if t[0] in ('灰', 'ギ', '白') else f'{t[0]}（本物）'
+        me = f'{t[0]}（{RN[t[1]]}）' if t[0][0] in ('灰', 'ギ', '白') else f'{t[0]}（本物）'
         d = [(labs[0], p), (labs[1], 1 - p)] if len(labs) == 2 else [(labs[0], F(1))]
         out.append(me + 'は' + '・'.join(f'{l}に{WT.fs(q) if q != 1 else "全部"}' for l, q in d if q))
     return '昼：' + '、'.join(out)
@@ -170,7 +170,7 @@ def state_entry(key):
                 pt[lab] = [F(q), F(q) * w]
             per.append((x, pt))
     e = assemble(labels, ws0, [('g', plan, per, v)])
-    fresh = bool(GM.worlds(labels)) and D.board_key(labels) == key   # 新しい盤面（そのページ）と同じ割合か
+    fresh = all(len(l) == 1 for l in labels) and bool(GM.worlds(labels)) and D.board_key(labels) == key   # 新しい盤面（そのページ）と同じ割合か
     assert sum(p * x for (p, _), (x, _) in zip(ws0, per)) == v
     return dict(n=len(labels), board=e['board'], v=e['v'], plan=e['plan'], secs=e['secs'], summ=e['summ'], fresh=fresh)
 

@@ -72,12 +72,12 @@ def detail(board, roles):
 
 def who(board, roles, i):
     l, r = board[i], roles[i]
-    if l in ('灰', 'ギ'): return f'{l}（{RN[r]}）'
+    if l[0] in ('灰', 'ギ', '白') or len(l) > 1: return f'{l}（{RN[r] if l[0] in ("灰", "ギ", "白") or r in "XW" else "本物"}）'
     return f'{l}（{RN[r] if r in "XW" else "本物"}）'
 
 def targets(board, i):
     """i から見た投票先の区分（自分以外の見た目）"""
-    return sorted({board[j] for j in range(len(board)) if j != i}, key=LABELS.index)
+    return sorted({board[j] for j in range(len(board)) if j != i}, key=lambda l: (LABELS.index(l[0]), l))
 
 def vote_dist(board, i, dist):
     """区分ごとの確率 → 個人ごとの確率（同じ見た目の人は等分）"""

@@ -4,6 +4,7 @@ import refs, time, itertools
 from multiprocessing import Pool
 from fractions import Fraction as F
 import os
+import game as GM
 from game import Game, solve_adv, agents_infosets, evaluate, LABELS
 from plans import candidates
 
@@ -40,9 +41,11 @@ def job(args):
     cands = candidates(board)
     for plan in cands:
         if key(plan) in done1: continue
+        GM.MODE.update(exact=False, tags=False)   # 探索は小数の木で
         g = Game(board, plan, ref=REF); root, ws = g.root()
         if not ws: return board, None, 0, 0
-        v, pol = solve_adv(root, starts=2)
+        v, pol = solve_adv(root, starts=2); v = F(v).limit_denominator(10**9)
+        del root
         done1[key(plan)] = v; st['s1'].append([str(v), plan])
         if path: _save(path, st)
     res = sorted(((done1[key(p)], p) for p in cands), key=lambda x: -x[0])
@@ -51,11 +54,14 @@ def job(args):
     top = []
     for v0, plan in res[:8]:
         if key(plan) not in done2:
+            GM.MODE.update(exact=False, tags=False)
             g = Game(board, plan, ref=REF); root, ws = g.root()
-            v, pol = solve_adv(root, starts=15)
+            vf, pol = solve_adv(root, starts=15)
+            del root
+            v = g.exact_value(pol)   # 値は分数で厳密に（内訳ごとに作り直す）
             done2[key(plan)] = v; st['s2'].append([str(v), plan])
             if path: _save(path, st)
-        top.append((min(done2[key(plan)], v0), plan))
+        top.append((done2[key(plan)], plan))
     top.sort(key=lambda x: -x[0])
     res = top + res[8:]
     return board, [(str(v), p) for v, p in res], time.time() - t, len(res)
@@ -68,7 +74,7 @@ def load_refs(n):
 
 if __name__ == '__main__':
     n = int(sys.argv[1]); out = sys.argv[2]
-    if n >= 5: load_refs(n)   # 5人日以上は、翌日の盤面を保存済みの3・4人日の結果で置き換える
+    if os.environ.get('USE_REF'): load_refs(n)   # 参照（近似）は使わないのが既定。厳密な値と差が出るため
     import os
     results = json.load(open(out)) if os.path.exists(out) else {}   # 途中から再開
     bs = [b for b in boards(n) if ','.join(b) not in results]
@@ -76,10 +82,16 @@ if __name__ == '__main__':
     partial = out + '.partial'
     os.makedirs(partial, exist_ok=True)
     npar = int(sys.argv[3]) if len(sys.argv) > 3 else 4
-    # 重い盤面は1つで数GB使うので、並列数1なら Pool を使わずに順に解く（メモリ不足で止まったときに気づける）
-    it = map(job, [(b, partial) for b in bs]) if npar == 1 else Pool(npar).imap_unordered(job, [(b, partial) for b in bs])
+    from game import worlds
+    # 内訳が多い盤面は木が数GBになるので1つずつ（並列だとメモリ不足で止まる）。軽い盤面は並列で
+    light = [b for b in bs if len(worlds(b)) <= 60]; heavy = [b for b in bs if len(worlds(b)) > 60]
+    def runs():
+        if light:
+            with Pool(npar) as pool:
+                yield from pool.imap_unordered(job, [(b, partial) for b in light])
+        for b in heavy: yield job((b, partial))
     if True:
-        for board, res, dt, k in it:
+        for board, res, dt, k in runs():
             results[','.join(board)] = res or []   # 配役から起こらない盤面は空で記録
             if not res:
                 json.dump(results, open(out + '.tmp', 'w'), ensure_ascii=False); os.replace(out + '.tmp', out)

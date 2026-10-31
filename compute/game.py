@@ -56,15 +56,21 @@ class Node:
         self.fch = None; self.fv = None
         for k, x in kw.items(): setattr(self, k, x)
 
-def leaf(v): return Node('L', v=F(v))
+# EXACT=False のときは、探索用に木を小数で作り、説明用の目印の節も作らない（メモリを大きく減らす）。
+# 値は最後に exact_value で、内訳ごとに分数の木を作り直して厳密に求める。
+MODE = {'exact': True, 'tags': True}
+
+def leaf(v): return Node('L', v=F(v) if MODE['exact'] else float(v))
 
 def tagged(tag, node):
     """説明用の目印（吊り・噛み・GJ など）をつけた1本道の節"""
-    return Node('C', ch=[(F(1), node)], tag=tag)
+    if not MODE['tags']: return node
+    return Node('C', ch=[(F(1) if MODE['exact'] else 1.0, node)], tag=tag)
 
 def chance(lst):
     lst = [(p, c) for p, c in lst if p > 0]
     if len(lst) == 1: return lst[0][1]
+    if not MODE['exact']: lst = [(float(p), c) for p, c in lst]
     return Node('C', ch=lst)
 
 class Game:
@@ -87,7 +93,22 @@ class Game:
         ws = worlds(self.board)
         tot = sum(w for w, _ in ws)
         st0 = dict(alive=tuple(range(self.n)), lab=tuple(self.board), hist=(), bites=())
-        return Node('C', ch=[(F(w, tot), self.day(roles, st0)) for w, roles in ws]), ws   # 内訳ごとの枝（1つでもまとめない）
+        cv = (lambda x: x) if MODE['exact'] else float
+        return Node('C', ch=[(cv(F(w, tot)), self.day(roles, st0)) for w, roles in ws]), ws   # 内訳ごとの枝（1つでもまとめない）
+
+    def exact_value(self, pol):
+        """人外の手 pol のもとで、村勝率を分数で厳密に（内訳ごとに分数の木を作っては捨てる）"""
+        old = dict(MODE); MODE.update(exact=True, tags=False)
+        try:
+            ws = worlds(self.board); tot = sum(w for w, _ in ws)
+            st0 = dict(alive=tuple(range(self.n)), lab=tuple(self.board), hist=(), bites=())
+            v = F(0)
+            for w, roles in ws:
+                nd = self.day(roles, st0)
+                v += F(w, tot) * evaluate(nd, pol, default=0)
+            return v
+        finally:
+            MODE.update(old)
 
     # ---- 昼
     def day(self, roles, st):
@@ -268,15 +289,15 @@ def agents_infosets(root):
     walk(root, 0)
     return byinfo, order
 
-def evaluate(root, pol):
-    """厳密な値（分数）"""
+def evaluate(root, pol, default=None):
+    """厳密な値（分数）。default を与えると、pol にない情報集合（その内訳だけで出る）ではその手を使う"""
     memo = {}
     def v(nd):
         k = id(nd)
         if k in memo: return memo[k]
         if nd.kind == 'L': r = nd.v
         elif nd.kind == 'C': r = sum((p * v(c) for p, c in nd.ch), F(0))
-        else: r = v(nd.ch[pol[(nd.agent, nd.info)]])
+        else: r = v(nd.ch[pol.get((nd.agent, nd.info), default) if default is not None else pol[(nd.agent, nd.info)]])
         memo[k] = r; return r
     return v(root)
 
@@ -289,7 +310,7 @@ def to_float(root):
         seen.add(id(nd))
         if nd.kind == 'L': nd.fv = float(nd.v)
         elif nd.kind == 'C':
-            nd.fch = [(float(p), c) for p, c in nd.ch]; stack.extend(c for _, c in nd.ch)
+            nd.fch = nd.ch if not MODE['exact'] else [(float(p), c) for p, c in nd.ch]; stack.extend(c for _, c in nd.ch)
         else: stack.extend(nd.ch)
 
 def evaluate_f(root, pol):
@@ -351,6 +372,7 @@ def solve_adv(root, starts=15):
             if prev is not None and v >= prev - 1e-12: break
             prev = v
         if best is None or v < best[0] - 1e-12: best = (v, pol)
+    if not MODE['exact']: return best[0], best[1]   # 小数の木：厳密な値は Game.exact_value で
     return evaluate(root, best[1]), best[1]   # 値は分数で厳密に
 
 def solve_adv_exact(root, limit=200000):

@@ -57,6 +57,8 @@ def paths(board, roles, node, pol):
     return out
 
 def board_text(board, ranked):
+    import game as GM
+    from game import worlds
     best_v, best_plan = ranked[0]
     alt = None
     for v, p in ranked[1:]:
@@ -65,13 +67,22 @@ def board_text(board, ranked):
         for v, p in ranked[1:]:
             if p['guard'][0] != best_plan['guard'][0] or p['co'] != best_plan['co']: alt = (v, p); break
     plans = [('g', best_plan)] + ([('a', alt[1])] if alt else [])
+    ws0 = worlds(board); tot = sum(w for w, _ in ws0)
+    st0 = dict(alive=tuple(range(len(board))), lab=tuple(board), hist=(), bites=())
     runs = []
     for tag, plan in plans:
-        g = Game(board, plan, ref=REF); root, ws = g.root()
-        v, pol = solve_adv(root)
-        runs.append((tag, plan, root, ws, pol, v))
-    _, _, root0, ws0, _, _ = runs[0]
-    tot = sum(w for w, _ in ws0)
+        # 人外の手は小数の木で探し、内訳ごとの値と道すじは分数・目印つきの木を1つずつ作って求める（メモリ節約）
+        GM.MODE.update(exact=False, tags=False)
+        g = Game(board, plan, ref=REF); root, _ = g.root()
+        vf, pol = solve_adv(root)
+        del root
+        GM.MODE.update(exact=True, tags=True)
+        per = []
+        for w, roles in ws0:
+            nd = g.day(roles, st0)
+            per.append((evaluate(nd, pol, default=0), paths(board, roles, nd, pol)))
+            del nd
+        runs.append((tag, plan, per, sum(F(w, tot) * x[0] for (w, _), x in zip(ws0, per))))
     sits = OrderedDict()
     for k, (w, roles) in enumerate(ws0):
         sits.setdefault(situation(board, roles), []).append(k)
@@ -80,28 +91,25 @@ def board_text(board, ranked):
         ks = sits[st]
         groups = OrderedDict()
         for k in ks:
-            roles = ws0[k][1]
-            groups.setdefault(WT.case_title(board, roles, st, False), []).append(k)
+            groups.setdefault(WT.case_title(board, ws0[k][1], st, False), []).append(k)
         single = len(groups) == 1
-        vals = []
-        for tag, plan, root, ws, pol, v in runs:
-            num = sum(root.ch[k][0] * evaluate(root.ch[k][1], pol) for k in ks); den = sum(root.ch[k][0] for k in ks)
-            vals.append(fs(num / den))
-        summ.append(dict(sit=st, share=fs(F(sum(ws0[k][0] for k in ks), tot)), v=vals[0], va=vals[1] if len(vals) > 1 else None))
+        den = sum(F(ws0[k][0]) for k in ks)
+        vals = [fs(sum(F(ws0[k][0]) * per[k][0] for k in ks) / den) for tag, plan, per, v in runs]
+        summ.append(dict(sit=st, share=fs(den / tot), v=vals[0], va=vals[1] if len(vals) > 1 else None))
         for t, lst in groups.items():
             items = []
-            for tag, plan, root, ws, pol, v in runs:
-                agg = defaultdict(lambda: [F(0), F(0)]); den = F(0)
+            for tag, plan, per, v in runs:
+                agg = defaultdict(lambda: [F(0), F(0)]); dg = F(0)
                 for k in lst:
-                    p, ch = root.ch[k]; den += p
-                    for lab, (q, qv) in paths(board, ws[k][1], ch, pol).items():
+                    p = F(ws0[k][0]); dg += p
+                    for lab, (q, qv) in per[k][1].items():
                         agg[lab][0] += p * q; agg[lab][1] += p * qv
-                lines = sorted(([lab, fs(q / den), fs(qv / q) if q else '0'] for lab, (q, qv) in agg.items()), key=lambda x: -F(x[1]))
+                lines = sorted(([lab, fs(q / dg), fs(qv / q) if q else '0'] for lab, (q, qv) in agg.items()), key=lambda x: -F(x[1]))
                 total = sum(F(x[1]) * F(x[2]) for x in lines)
                 items.append(dict(tag=tag, best=(tag == 'g'), plan=plan_text(plan), paths=lines, v=fs(total)))
-            secs.append(dict(title=st if single else t, share=fs(F(sum(ws0[k][0] for k in lst), tot)), items=items))
-    return dict(board=board, v=fs(runs[0][5]), plan=plan_text(best_plan),
-                va=fs(runs[1][5]) if len(runs) > 1 else None, plana=plan_text(runs[1][1]) if len(runs) > 1 else None,
+            secs.append(dict(title=st if single else t, share=fs(sum(F(ws0[k][0]) for k in lst) / tot), items=items))
+    return dict(board=board, v=fs(runs[0][3]), plan=plan_text(best_plan),
+                va=fs(runs[1][3]) if len(runs) > 1 else None, plana=plan_text(runs[1][1]) if len(runs) > 1 else None,
                 secs=secs, summ=summ)
 
 REF = {}
@@ -112,7 +120,7 @@ def load_refs(n):
 
 if __name__ == '__main__':
     n = int(sys.argv[1]); src = sys.argv[2]; dst = sys.argv[3]
-    if n >= 5: load_refs(n)
+    if os.environ.get('USE_REF'): load_refs(n)
     R = json.load(open(src))
     out = []
     for key, ranked in R.items():

@@ -14,7 +14,7 @@ def table3():
     for board in V3.boards():
         R = G.solve_board(board)
         if not R: continue
-        P = G.plan_dists(R); A = {t: {a: F(1)} for t, a in zip(R['at'], R['ads'])}
+        P = G.plan_dists(R); A = {t[:2]: {a: F(1)} for t, a in zip(R['at'], R['ads'])}
         for w, roles in R['cases']:
             votes = [V3.vote_dist(board, i, P[(board[i], roles[i])] if roles[i] in V3.VILL else A[(board[i], roles[i])]) for i in range(len(board))]
             tab[key_of(board, roles)] = G.outcome(board, roles, votes, True)[1]

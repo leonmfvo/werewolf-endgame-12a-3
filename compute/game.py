@@ -75,10 +75,11 @@ def chance(lst):
 
 class Game:
     """plan: dict(des=('灰', ...), counter=True, self='next', guard=('霊', ...), co=True)"""
-    def __init__(self, board, plan, ref=None):
-        """ref：{生存人数: 表}。翌日の盤面がその表にあれば、その内訳の村勝率で置き換える（refs.py）"""
+    def __init__(self, board, plan, ref=None, start=None):
+        """ref：{生存人数: 表}。翌日の盤面がその表にあれば、その内訳の村勝率で置き換える（refs.py）
+        start：[(確率, 役, 狼が知っている人間)] を与えると、その割合から始めて、翌日の手前で止める（daily.py 用。翌日は 'N' の節）"""
         self.board = list(board); self.plan = plan; self.n = len(board)
-        self.memo = {}; self.ref = ref or {}
+        self.memo = {}; self.ref = ref or {}; self.start = start
 
     def labels(self, st):
         return st['lab']
@@ -90,6 +91,10 @@ class Game:
         return None
 
     def root(self):
+        if self.start is not None:
+            st0 = dict(alive=tuple(range(self.n)), lab=tuple(self.board), hist=())
+            cv = (lambda x: x) if MODE['exact'] else float
+            return Node('C', ch=[(cv(p), self.day(roles, dict(st0, bites=tuple(know)))) for p, roles, know in self.start]), None
         ws = worlds(self.board)
         tot = sum(w for w, _ in ws)
         st0 = dict(alive=tuple(range(self.n)), lab=tuple(self.board), hist=(), bites=())
@@ -212,6 +217,9 @@ class Game:
     def next_day(self, roles, st):
         """翌日：保存済みの少ない人数の結果があれば、その内訳の村勝率を使う"""
         al = st['alive']
+        if self.start is not None:   # 日ごとに解く：翌日の状態をそのまま返す（狼が知っている人間＝噛んで生き残った人）
+            know = tuple(sorted(set(st['bites']) & set(al)))
+            return Node('N', info=(st['hist'], al, st['lab'], roles, know))
         tab = self.ref.get(len(al))
         if tab is not None:
             from refs import key_of

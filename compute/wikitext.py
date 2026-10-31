@@ -97,8 +97,8 @@ def board_text(board):
     import vote3g as G
     R = G.solve_board(board)
     if not R: return None
-    plans = [('g', G.plan_dists(R), {t: {a: F(1)} for t, a in zip(R['at'], R['ads'])})]
-    if R['alt']: plans.append(('a', G.plan_dists(R, R['alt']['ps']), {t: {a: F(1)} for t, a in zip(R['at'], R['alt']['ads'])}))
+    plans = [('g', G.plan_dists(R), {t[:2]: {a: F(1)} for t, a in zip(R['at'], R['ads'])})]
+    if R['alt']: plans.append(('a', G.plan_dists(R, R['alt']['ps']), {t[:2]: {a: F(1)} for t, a in zip(R['at'], R['alt']['ads'])}))
     sits = defaultdict(list)
     for w, roles in R['cases']: sits[V3.situation(board, roles)].append((w, roles))
     allw = sum(w for w, _ in R['cases'])

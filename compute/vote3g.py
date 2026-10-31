@@ -8,11 +8,14 @@ import vote3 as V3
 
 COARSE = [0, 1/4, 1/3, 1/2, 2/3, 3/4, 1]
 
-def solve_board(board):
-    cases = list(V3.assignments(board))
+def solve_board(board, cases=None, extras=None):
+    """cases：[(重み, 役)]（省略すると役の札の数からの重み）。extras：内訳ごとの、狼だけが知っていること（狼の型を分ける）"""
+    cases = list(V3.assignments(board)) if cases is None else list(cases)
     if not cases: return None
+    extras = extras or [None] * len(cases)
+    xt = lambda k, i, r: (board[i], r, extras[k] if r == 'W' else None)
     vt = sorted({(board[i], r[i]) for _, r in cases for i in range(len(board)) if r[i] in V3.VILL}, key=lambda t: (V3.LABELS.index(t[0]), t[1]))
-    at = sorted({(board[i], r[i]) for _, r in cases for i in range(len(board)) if r[i] in 'WX'}, key=lambda t: (V3.LABELS.index(t[0]), t[1]))
+    at = sorted({xt(k, i, r[i]) for k, (_, r) in enumerate(cases) for i in range(len(board)) if r[i] in 'WX'}, key=lambda t: (V3.LABELS.index(t[0]), t[1], repr(t[2])))
     tg = {t: V3.targets(board, board.index(t[0])) for t in vt + at}
     tot = sum(w for w, _ in cases)
     # 浮動小数で速く：各内訳について、各人の投票先（個人）の確率
@@ -20,16 +23,16 @@ def solve_board(board):
     def val(ps, ads, exact=False):
         num = (lambda x: F(x)) if exact else float
         s = num(0)
-        for w, roles in cases:
+        for k, (w, roles) in enumerate(cases):
             votes = []
             for i in range(len(board)):
                 t = (board[i], roles[i])
                 if roles[i] in V3.VILL:
                     labs = tg[t]; d = {labs[0]: num(ps[idx_of[t]]), labs[1]: 1 - num(ps[idx_of[t]])} if len(labs) == 2 else {labs[0]: num(1)}
-                else: d = {ads[at.index(t)]: num(1)}
+                else: d = {ads[at.index(xt(k, i, roles[i]))]: num(1)}
                 votes.append(V3.vote_dist(board, i, d) if exact else {j: float(p) for j, p in V3.vote_dist(board, i, {k: F(v) if not isinstance(v, float) else F(v).limit_denominator(1000) for k, v in d.items()}).items()})
             hang, v = outcome(board, roles, votes, exact)
-            s += num(w) / tot * v
+            s += num(w) / num(tot) * v
         return s
     aopts = list(itertools.product(*[tg[t] for t in at]))
     def worst(ps):

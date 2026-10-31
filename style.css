@@ -1,6 +1,6 @@
-:root{--bg:#ffffff;--fg:#333333;--muted:#777777;--border:#cccccc;--bar:#eeeeee;--side:#f7f7f7;--link:#2a6fbd;--hl:#fff7d6;--vwin:#1a62b8;--wwin:#c0392b}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16181b;--fg:#e4e4e4;--muted:#9a9a9a;--border:#3a3d42;--bar:#24272b;--side:#1d2024;--link:#7fb0ea;--hl:#3a3420;--vwin:#7fb0ea;--wwin:#ef7d6f}}
-:root[data-theme="dark"]{--bg:#16181b;--fg:#e4e4e4;--muted:#9a9a9a;--border:#3a3d42;--bar:#24272b;--side:#1d2024;--link:#7fb0ea;--hl:#3a3420;--vwin:#7fb0ea;--wwin:#ef7d6f}
+:root{--bg:#ffffff;--fg:#333333;--muted:#777777;--border:#cccccc;--bar:#eeeeee;--side:#f7f7f7;--link:#2a6fbd;--hl:#fff7d6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16181b;--fg:#e4e4e4;--muted:#9a9a9a;--border:#3a3d42;--bar:#24272b;--side:#1d2024;--link:#7fb0ea;--hl:#3a3420}}
+:root[data-theme="dark"]{--bg:#16181b;--fg:#e4e4e4;--muted:#9a9a9a;--border:#3a3d42;--bar:#24272b;--side:#1d2024;--link:#7fb0ea;--hl:#3a3420}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 "Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",Meiryo,sans-serif}
@@ -96,6 +96,3 @@ ol.terms li{margin:0 0 2px}
 .tm .katex,.total .katex,table.cmp .katex,.headline .katex{font-size:1.25em}
 /* 翌日の状態へのリンク（道すじの中の盤面） */
 a.nxl{font-weight:700;background:var(--hl);padding:0 3px;border-radius:3px}
-/* 決着した行の行末 */
-.vw{color:var(--vwin);font-weight:700}
-.ww{color:var(--wwin);font-weight:700}

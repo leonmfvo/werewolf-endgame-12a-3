@@ -1,2 +1,3 @@
 __pycache__/
 data/*.work.json
+data/*.work.json.tmp

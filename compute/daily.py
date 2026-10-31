@@ -135,7 +135,7 @@ def total(root, pol, exact=False):
 class Flat:
     """1日分の木を「行き着く先」の並びに平らにして、人外の手を1か所変えたときに、影響する行き先だけを足し引きする（探索を速くする）"""
     def __init__(self, root):
-        self.keys = {}; self.opts = []          # 情報集合 → 番号、選択肢の数
+        self.keys = {}; self.opts = []; self.mimic = []   # 情報集合 → 番号、選択肢の数、村人と同じ投票をする手
         self.leaves = []                       # (確率, 条件 [(情報集合番号, 手)], 決着の値 or None, 翌日の状態, 世界)
         stack = [(root, 1.0, ())]
         while stack:
@@ -150,7 +150,7 @@ class Flat:
                 for q, c in nd.ch: stack.append((c, p * float(q), req))
             else:
                 k = (nd.agent, nd.info)
-                if k not in self.keys: self.keys[k] = len(self.opts); self.opts.append(len(nd.opts))
+                if k not in self.keys: self.keys[k] = len(self.opts); self.opts.append(len(nd.opts)); self.mimic.append(nd.mimic)
                 i = self.keys[k]
                 for a, c in enumerate(nd.ch): stack.append((c, p, req + ((i, a),)))
         self.by = defaultdict(list)
@@ -227,7 +227,8 @@ def adversary_min(root, starts=9, kicks=KICKS):
         return cur
     for s in range(starts):
         rnd = random.Random(s)
-        pol = [0 if s == 0 else rnd.randrange(fl.opts[i]) for i in range(n)]
+        # 1回目は「人外が村人と同じ投票をする（正体を隠す）」手から、2回目以降はばらばらの手から
+        pol = list(fl.mimic) if s == 0 else [rnd.randrange(fl.opts[i]) for i in range(n)]
         cur = fl.setup(pol)
         # 見る順番：前から・後ろから・ばらばら（順番しだいで行き着く手が変わるので、いくつか試して一番低いものを取る）
         order = list(range(n)) if s % 3 == 0 else (list(range(n))[::-1] if s % 3 == 1 else rnd.sample(range(n), n))
@@ -273,7 +274,19 @@ def solve_day(key, labels, worlds):
     INFO[key] = dict(plan=best[1])
     return best[0]
 
+def sit_name(w, k):
+    return f'{w}w' + ('1k' if k else '') + '生存'
+
+def board_keys(board):
+    """盤面の、生存状況（狼の数・狂人の生死）ごとの状態キー {生存状況: キー}。生存状況は全員が知っている（wiki と同じ）。
+    割合は役の札の数から。狩人・猫又が灰にいるかは分からない"""
+    ws = GM.worlds(board)
+    by = {}
+    for w, roles in ws:
+        by.setdefault(GM.situation(board, roles), []).append((F(w), roles, ()))
+    return {s: canon(board, lst) for s, lst in sorted(by.items(), key=lambda kv: (kv[0][0], '1k' not in kv[0], kv[0]))}
+
 def board_key(board):
-    """盤面（最初の割合：役の札の数から）の状態キー"""
+    """（参考）生存状況を分けない盤面の状態キー"""
     ws = GM.worlds(board)
     return canon(board, [(F(w), roles, ()) for w, roles in ws])

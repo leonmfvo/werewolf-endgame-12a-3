@@ -49,10 +49,10 @@ def situation(board, roles, alive=None):
 
 # ---------------------------------------------------------------- 木
 class Node:
-    __slots__ = ('kind', 'ch', 'v', 'info', 'agent', 'opts', 'tag', 'fch', 'fv')
+    __slots__ = ('kind', 'ch', 'v', 'info', 'agent', 'opts', 'tag', 'fch', 'fv', 'mimic')
     # kind: 'L' 終局（v）/ 'C' 偶然（ch=[(p, node)]）/ 'A' 人外の選択（agent, info, opts=[label], ch=[node]）
     def __init__(self, kind, **kw):
-        self.kind = kind; self.ch = None; self.v = None; self.info = None; self.agent = None; self.opts = None; self.tag = None
+        self.kind = kind; self.ch = None; self.v = None; self.info = None; self.agent = None; self.opts = None; self.tag = None; self.mimic = 0
         self.fch = None; self.fv = None
         for k, x in kw.items(): setattr(self, k, x)
 
@@ -167,12 +167,16 @@ class Game:
         # 人外の投票：見分けのつかない人（同じ見た目・指定されたかどうかが同じ）の中からはランダム。狼（全員まとめて1つの選択）→ 狂人
         wopts = list(itertools.product(*[self.groups(st, i, d) for i in wolves]))
         wnode = Node('A', agent='W', info=('V', st['hist'], st['lab'], wolves, st['bites'], d), opts=wopts, ch=[])
+        # 人外の探索の出発点：村人と同じ投票をする（正体を隠す）手
+        like = lambda i, groups: max(range(len(groups)), key=lambda a: sum(self.village_vote(roles, st, i, d).get(j, 0) for j in groups[a]))
+        wnode.mimic = wopts.index(tuple(self.groups(st, i, d)[like(i, self.groups(st, i, d))] for i in wolves)) if wolves else 0
         for wv in wopts:
             wd = {i: {j: F(1, len(g)) for j in g} for i, g in zip(wolves, wv)}
             if mad:
                 m = mad[0]
                 mo = self.groups(st, m, d)
                 mnode = Node('A', agent='X', info=('V', st['hist'], st['lab'], m, d), opts=mo, ch=[])
+                mnode.mimic = like(m, mo)
                 for g in mo:
                     mnode.ch.append(self.resolve(roles, st, vill, wd | {m: {j: F(1, len(g)) for j in g}}))
                 wnode.ch.append(mnode)
@@ -219,7 +223,9 @@ class Game:
         al = st['alive']
         if self.start is not None:   # 日ごとに解く：翌日の状態をそのまま返す（狼が知っている人間＝噛んで生き残った人）
             know = tuple(sorted(set(st['bites']) & set(al)))
-            return Node('N', info=(st['hist'], al, st['lab'], roles, know))
+            # 生存状況（狼の数・狂人の生死・灰に狩人／猫又がいるか）は全員が知っている（wiki と同じ）：翌日の状態は生存状況ごとに分ける
+            sk = ('sit', situation(st['lab'], roles, al))
+            return Node('N', info=(st['hist'] + (sk,), al, st['lab'], roles, know))
         tab = self.ref.get(len(al))
         if tab is not None:
             from refs import key_of

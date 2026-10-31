@@ -92,7 +92,7 @@ def world_values(key):
         vals = [v for v, _ in run_plan(labels, worlds, D.INFO[key]['plan'])]
     WV[key] = {(r, tuple(kn)): v for (p, r, kn), v in zip(worlds, vals)}
     tot = sum(p * v for (p, r, kn), v in zip(worlds, vals))
-    assert tot == D.DICT[key], (key[0], tot, D.DICT[key])   # 辞書の値と一致すること
+    assert tot == D.value(key), (key[0], tot, D.DICT[key])   # 辞書の値と一致すること（比べる相手の進め方の先は辞書にないこともあるので、なければ解いて足す）
     return WV[key]
 
 def alt_plan(labels, worlds, best):
@@ -129,9 +129,10 @@ def board_page(board):
 if __name__ == '__main__':
     n = int(sys.argv[1]); dst = sys.argv[2]
     RD.load()
-    out = []
+    out = json.load(open(dst)) if os.path.exists(dst) else []   # 途中から再開できる
+    done = {','.join(x['board']) for x in out}
     for b in boards(n, white=(n <= 4)):
-        if not GM.worlds(b): continue
+        if not GM.worlds(b) or ','.join(b) in done: continue
         out.append(board_page(b))
         print(','.join(b), out[-1]['v'], out[-1]['va'], flush=True)
         json.dump(out, open(dst, 'w'), ensure_ascii=False, separators=(',', ':'))

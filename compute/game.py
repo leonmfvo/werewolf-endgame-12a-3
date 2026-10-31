@@ -43,8 +43,11 @@ def situation(board, roles, alive=None):
     w = sum(1 for i in alive if roles[i] == 'W'); x = any(roles[i] == 'X' for i in alive)
     st = f'{w}w' + ('1k' if x else '') + '生存'
     hid = []
-    if any(board[i][0] == '灰' and roles[i] == 'H' for i in alive): hid.append('狩生存')
-    if any(board[i][0] == '灰' and roles[i] == 'C' for i in alive): hid.append('猫生存')
+    # wiki と同じく、本物の狩人・猫又が生きているかも生存状況に入れる（全員が知っている）。
+    # 狩生存：本物の狩人がどこかで生きている（狩COが1人だけで本物と決まっているときは書かない）。猫生存：本物の猫又が猫COの外（灰・ギ）で生きている
+    lone = sum(1 for i in alive if board[i][0] == '狩') == 1
+    if any(roles[i] == 'H' and not (board[i][0] == '狩' and lone) for i in alive): hid.append('狩生存')
+    if any(roles[i] == 'C' and board[i][0] != '猫' for i in alive): hid.append('猫生存')
     return st + ('（' + '・'.join(hid) + '）' if hid else '')
 
 # ---------------------------------------------------------------- 木

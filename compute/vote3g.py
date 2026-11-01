@@ -20,6 +20,7 @@ def solve_board(board, cases=None, extras=None):
     tot = sum(w for w, _ in cases)
     # 浮動小数で速く：各内訳について、各人の投票先（個人）の確率
     idx_of = {t: i for i, t in enumerate(vt)}
+    seats = {(i, l): [j for j in range(len(board)) if j != i and board[j] == l] for i in range(len(board)) for l in set(board)}
     def val(ps, ads, exact=False, per=None, hangs=None):
         num = (lambda x: F(x)) if exact else float
         s = num(0)
@@ -30,15 +31,24 @@ def solve_board(board, cases=None, extras=None):
                 if roles[i] in V3.VILL:
                     labs = tg[t]; d = {labs[0]: num(ps[idx_of[t]]), labs[1]: 1 - num(ps[idx_of[t]])} if len(labs) == 2 else {labs[0]: num(1)}
                 else: d = {ads[at.index(xt(k, i, roles[i]))]: num(1)}
-                votes.append(V3.vote_dist(board, i, d) if exact else {j: float(p) for j, p in V3.vote_dist(board, i, {k: F(v) if not isinstance(v, float) else F(v).limit_denominator(1000) for k, v in d.items()}).items()})
+                if exact: votes.append(V3.vote_dist(board, i, d))
+                else:   # 小数のまま（分数にすると遅い）：区分ごとの確率を、その区分の人に等分
+                    vd = {}
+                    for l, q in d.items():
+                        js = seats[(i, l)]
+                        for j in js: vd[j] = vd.get(j, 0.0) + float(q) / len(js)
+                    votes.append(vd)
             hang, v = outcome(board, roles, votes, exact)
             if per is not None: per.append(v)
             if hangs is not None: hangs.append(dict(hang))
             s += num(w) / num(tot) * v
         return s
     aopts = list(itertools.product(*[tg[t] for t in at]))
+    wmemo = {}
     def worst(ps):
-        return min((val(ps, a), a) for a in aopts)
+        k = tuple(ps)
+        if k not in wmemo: wmemo[k] = min((val(ps, a), a) for a in aopts)
+        return wmemo[k]
     nv = [len(tg[t]) == 2 for t in vt]
     grids = [COARSE if two else [1] for two in nv]
     best = None
@@ -51,11 +61,8 @@ def solve_board(board, cases=None, extras=None):
         w = worst(ps)
         if best is None or w[0] > best[0] + 1e-12: best = (w[0], ps, w[1])
     if 7 ** sum(nv) > 20000:
-        tops = []
-        for ps in itertools.product(*[[0, 1/2, 1] if two else [1] for two in nv]):
-            tops.append((worst(ps)[0], ps))
-        tops.sort(key=lambda x: -x[0])
-        for _, ps in tops[:20]:   # 上位の出発点から 1/12 刻みで1つずつ動かして詰める
+        tops = sorted(((worst(ps)[0], ps) for ps in itertools.product(*[[0, 1/2, 1] if two else [1] for two in nv])), key=lambda x: -x[0])
+        for _, ps in tops[:6]:   # 上位の出発点から 1/12 刻みで1つずつ動かして詰める
             ps = list(ps); cur = worst(ps)
             improved = True
             while improved:

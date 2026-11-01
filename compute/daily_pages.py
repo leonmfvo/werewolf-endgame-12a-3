@@ -203,19 +203,35 @@ def board_page(board):
         else: has_alt = False
     return dict(board=list(board), v=WT.fs(v), plan=None, va=WT.fs(va) if has_alt else None, plana=None, secs=secs, summ=summ)
 
+def key_json(k):
+    return json.dumps([list(k[0]), [[list(a), list(b), c] for a, b, c in k[1]]], ensure_ascii=False)
+
+def key_from(j):
+    x = json.loads(j)
+    return (tuple(x[0]), tuple((tuple(a), tuple(b), c) for a, b, c in x[1]))
+
 if __name__ == '__main__':
     n = int(sys.argv[1]); dst = sys.argv[2]
     sdst = os.path.join(os.path.dirname(dst), f's{n}.json')   # 翌日の状態の説明（ページで開く）
+    kdst = dst + '.keys.json'   # 翌日の状態の番号（途中から再開・盤面を足すとき用）
     RD.load()
-    out = []
+    out = json.load(open(dst)) if os.path.exists(dst) else []
+    done = {','.join(x['board']) for x in out}
+    st = json.load(open(sdst)) if os.path.exists(sdst) and os.path.exists(kdst) else []
+    if os.path.exists(kdst):
+        for j in json.load(open(kdst)): sid_of(key_from(j))
+    skip = set(os.environ.get('SKIP', '').split(';')) - {''}
     for b in RD.board_list(n):
-        if not GM.worlds(b): continue
+        if not GM.worlds(b) or ','.join(b) in done or ','.join(b) in skip: continue
         out.append(board_page(b))
         print(','.join(b), out[-1]['v'], out[-1]['va'], len(SQ), flush=True)
         json.dump(out, open(dst, 'w'), ensure_ascii=False, separators=(',', ':'))
-    st = []
+        json.dump([key_json(k) for k in SQ], open(kdst, 'w'), ensure_ascii=False)
     while len(st) < len(SQ):   # 翌日の状態の説明（その中の翌日の状態も足していく）
         st.append(state_entry(SQ[len(st)]))
-        if len(st) % 200 == 0: print('states', len(st), '/', len(SQ), flush=True)
+        if len(st) % 200 == 0:
+            print('states', len(st), '/', len(SQ), flush=True)
+            json.dump(st, open(sdst, 'w'), ensure_ascii=False, separators=(',', ':')); json.dump([key_json(k) for k in SQ], open(kdst, 'w'), ensure_ascii=False)
     json.dump(st, open(sdst, 'w'), ensure_ascii=False, separators=(',', ':'))
+    json.dump([key_json(k) for k in SQ], open(kdst, 'w'), ensure_ascii=False)
     print('states done', len(st), flush=True)

@@ -2,3 +2,4 @@ __pycache__/
 data/*.work.json
 data/*.work.json.tmp
 data/*.new.json
+data/*.keys.json

@@ -32,6 +32,8 @@ if __name__ == '__main__':
         if sel and n >= 5:
             k, m, s0 = map(int, sel.split('/'))
             bl = [b for i, b in enumerate(bl) if i >= s0 and (i - s0) % m == k]
+        if os.environ.get('BOARDS'):   # 解く盤面を直接指定（'霊,霊,灰,灰,灰;…'）
+            bl = [x.split(',') for x in os.environ['BOARDS'].split(';')]; sel = sel or 'list'
         for b in bl:
             res[','.join(b)] = {}
             for sit, k in D.board_keys(b).items():   # 生存状況ごと（全員が知っている）

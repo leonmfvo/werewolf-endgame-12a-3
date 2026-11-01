@@ -27,12 +27,16 @@ if __name__ == '__main__':
     load()
     for n in map(int, sys.argv[1:]):
         res = {}
-        for b in board_list(n):
-            if not D.GM.worlds(b): continue
+        sel = os.environ.get('PART')   # 並行して解くとき：'k/m/s' なら s 番目以降の盤面のうち、番号を m で割った余りが k のものだけ
+        bl = [b for b in board_list(n) if D.GM.worlds(b)]
+        if sel and n >= 5:
+            k, m, s0 = map(int, sel.split('/'))
+            bl = [b for i, b in enumerate(bl) if i >= s0 and (i - s0) % m == k]
+        for b in bl:
             res[','.join(b)] = {}
             for sit, k in D.board_keys(b).items():   # 生存状況ごと（全員が知っている）
                 t = time.time(); v = D.value(k)
                 res[','.join(b)][sit] = str(v)
                 print(n, ','.join(b), sit, v, f'{float(v) * 100:.1f}%', round(time.time() - t, 1), 's', len(D.DICT), 'states', flush=True)
             save()
-        json.dump(res, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', f'daily{n}.json'), 'w'), ensure_ascii=False)
+        if not sel: json.dump(res, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', f'daily{n}.json'), 'w'), ensure_ascii=False)

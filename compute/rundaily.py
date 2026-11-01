@@ -37,7 +37,8 @@ if __name__ == '__main__':
             bl = [x.split(',') for x in os.environ['BOARDS'].split(';')]; sel = sel or 'list'
         for b in bl:
             res[','.join(b)] = {}
-            for sit, k in D.board_keys(b).items():   # 生存状況ごと（全員が知っている）
+            for si, (sit, k) in enumerate(D.board_keys(b).items()):   # 生存状況ごと（全員が知っている）
+                if os.environ.get('SIT') and si != int(os.environ['SIT']): continue   # 並行して解くとき：この番号の生存状況だけ
                 t = time.time(); v = D.value(k)
                 res[','.join(b)][sit] = str(v)
                 print(n, ','.join(b), sit, v, f'{float(v) * 100:.1f}%', round(time.time() - t, 1), 's', len(D.DICT), 'states', flush=True)

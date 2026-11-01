@@ -42,9 +42,31 @@ def solve_board(board, cases=None, extras=None):
     nv = [len(tg[t]) == 2 for t in vt]
     grids = [COARSE if two else [1] for two in nv]
     best = None
-    for ps in itertools.product(*grids):
+    if 7 ** sum(nv) <= 20000:
+        seeds = itertools.product(*grids)
+    else:
+        # 決め方の種類が多い（狩A・狩B などで見分けられる人が多い）ときは、0・1/2・1 の組み合わせを出発点にして 1/12 刻みで良くしていく
+        seeds = itertools.product(*[[0, 1/2, 1] if two else [1] for two in nv])
+    for ps in seeds:
         w = worst(ps)
         if best is None or w[0] > best[0] + 1e-12: best = (w[0], ps, w[1])
+    if 7 ** sum(nv) > 20000:
+        tops = []
+        for ps in itertools.product(*[[0, 1/2, 1] if two else [1] for two in nv]):
+            tops.append((worst(ps)[0], ps))
+        tops.sort(key=lambda x: -x[0])
+        for _, ps in tops[:20]:   # 上位の出発点から 1/12 刻みで1つずつ動かして詰める
+            ps = list(ps); cur = worst(ps)
+            improved = True
+            while improved:
+                improved = False
+                for k in range(len(vt)):
+                    if not nv[k]: continue
+                    for q in [x / 12 for x in range(13)]:
+                        trial = ps[:]; trial[k] = q
+                        w = worst(trial)
+                        if w[0] > cur[0] + 1e-12: cur = w; ps = trial; improved = True
+            if cur[0] > best[0] + 1e-12: best = (cur[0], tuple(ps), cur[1])
     # 1/12 刻みで、1つずつ動かして詰める
     improved = True
     ps = list(best[1])

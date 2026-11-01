@@ -212,7 +212,7 @@ def key_from(j):
 
 if __name__ == '__main__':
     n = int(sys.argv[1]); dst = sys.argv[2]
-    sdst = os.path.join(os.path.dirname(dst), f's{n}.json')   # 翌日の状態の説明（ページで開く）
+    sdst = os.environ.get('SFILE') or os.path.join(os.path.dirname(dst), f's{n}.json')   # 翌日の状態の説明（ページで開く）
     kdst = dst + '.keys.json'   # 翌日の状態の番号（途中から再開・盤面を足すとき用）
     RD.load()
     out = json.load(open(dst)) if os.path.exists(dst) else []
@@ -221,7 +221,9 @@ if __name__ == '__main__':
     if os.path.exists(kdst):
         for j in json.load(open(kdst)): sid_of(key_from(j))
     skip = set(os.environ.get('SKIP', '').split(';')) - {''}
-    for b in RD.board_list(n):
+    bl = RD.board_list(n)
+    if os.environ.get('REVERSE'): bl = bl[::-1]   # 並行して作るとき：後ろから
+    for b in bl:
         if not GM.worlds(b) or ','.join(b) in done or ','.join(b) in skip: continue
         out.append(board_page(b))
         print(','.join(b), out[-1]['v'], out[-1]['va'], len(SQ), flush=True)

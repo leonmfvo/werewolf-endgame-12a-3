@@ -254,7 +254,7 @@ def solve_day(key, labels, worlds):
     for plan in candidates(labels):
         GM.MODE.update(exact=False, tags=False)   # 探索は小数の木で
         g = Game(labels, plan, start=start); root, _ = g.root()
-        vf, pol = adversary_min(root, starts=1)
+        vf, pol = adversary_min(root, starts=1, kicks=0)   # 1段目は崩しての探し直しなし（2段目の1回目はこれと同じ探索から始まるので、2段目の値はこれ以下）
         scr.append((vf, plan))
     scr.sort(key=lambda x: -x[0])
     # 2段目：1段目の値の高い順に、やり直し9回で詰め直す。9回のうち1回目は1段目と同じ探索なので、詰め直した値は1段目の値以下。

@@ -25,6 +25,7 @@ def board_list(n):
 
 if __name__ == '__main__':
     load()
+    D.SAVE_HOOK = save; D.LAST_SAVE = time.time()
     for n in map(int, sys.argv[1:]):
         res = {}
         sel = os.environ.get('PART')   # 並行して解くとき：'k/m/s' なら s 番目以降の盤面のうち、番号を m で割った余りが k のものだけ

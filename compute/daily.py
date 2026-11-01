@@ -1,7 +1,7 @@
 # 日ごとに解く（辞書方式）：盤面の状態＝見た目＋内訳の割合＋狼だけが知っていること。
 # その日の朝、村は状態に対して進め方の候補から最善を選び、人外は自分の視点で最善を返す。翌日の状態の村勝率は辞書から引く（なければ解いて足す）。
 # 状態の村勝率 = Σ（その日の結果で次の状態になる確率 × 次の状態の村勝率）＋（その日のうちに決着する分）。定義上、参照と全部作り直しは一致する。
-import itertools, json, os, random
+import itertools, json, os, random, time
 from fractions import Fraction as F
 from collections import defaultdict
 import game as GM
@@ -11,6 +11,7 @@ import vote3g as G3
 
 ORDER = ['霊', '猫', 'ギ', '狩', '白', '灰']
 DICT = {}   # 状態のキー → 村勝率（分数）
+SAVE_HOOK = None; LAST_SAVE = 0.0
 INFO = {}   # 状態のキー → 説明用（最善の進め方など）
 
 def canon(labels, worlds, with_pos=False):
@@ -87,6 +88,9 @@ def value(key):
     if n <= 3: v = solve3(labels, worlds)
     else: v = solve_day(key, labels, worlds)
     DICT[key] = v
+    global LAST_SAVE
+    if SAVE_HOOK and time.time() - LAST_SAVE > 600:   # 盤面の途中でも10分ごとに辞書を保存（止まっても続きから）
+        LAST_SAVE = time.time(); SAVE_HOOK()
     return v
 
 def solve3(labels, worlds):
